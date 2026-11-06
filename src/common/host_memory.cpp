@@ -1056,7 +1056,13 @@ void HostMemory::Protect(size_t virtual_offset, size_t length, MemoryPermission 
 
 void HostMemory::HintCold(size_t physical_offset, size_t length,
                           std::optional<size_t> virtual_offset) const {
-    if (length == 0 || backing_base == nullptr) {
+    // Paging a game's textures out every 600 frames stalled it for up to 1.4 s, swapping to zram
+    // while RAM was free. EDEN_NX2_HINT_COLD=1 brings it back for machines short of RAM.
+    static const bool enabled = [] {
+        const char* value = std::getenv("EDEN_NX2_HINT_COLD");
+        return value != nullptr && value[0] == '1';
+    }();
+    if (!enabled || length == 0 || backing_base == nullptr) {
         return;
     }
     const auto hint = [length](u8* address) {
