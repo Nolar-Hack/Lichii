@@ -734,12 +734,18 @@ std::unordered_map<u64, u8> LoadUsedPipelines(const std::filesystem::path& path,
 constexpr size_t MaxPipelinesWithoutUsedList = 3000;
 
 // EDEN_NX2_PRELOAD_ALL_PIPELINES=1 builds every cached pipeline at boot, as before.
-bool PreloadAllPipelines() {
-    static const bool all = [] {
+// =2 builds them too, for the driver's cache, but keeps only the used ones: a built pipeline holds
+// ~0.45 MB of driver memory, so 20,000 of them filled a 24 GB card.
+char PreloadAllMode() {
+    static const char mode = [] {
         const char* value = std::getenv("EDEN_NX2_PRELOAD_ALL_PIPELINES");
-        return value != nullptr && value[0] == '1';
+        return value != nullptr ? value[0] : '0';
     }();
-    return all;
+    return mode;
+}
+
+bool PreloadAllPipelines() {
+    return PreloadAllMode() == '1' || PreloadAllMode() == '2';
 }
 } // Anonymous namespace
 
@@ -1093,7 +1099,10 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
         }
         ++queued_graphics;
 
-        workers.QueueWork([this, key, envs_ = std::move(envs), &state, &callback]() mutable {
+        const bool keep_built =
+            PreloadAllMode() != '2' || used_pipelines.empty() || used_pipelines.contains(hash);
+        workers.QueueWork([this, key, keep_built, envs_ = std::move(envs), &state,
+                           &callback]() mutable {
             ShaderPools pools;
             boost::container::static_vector<Shader::Environment*, 5> env_ptrs;
             for (auto& env : envs_) {
@@ -1103,7 +1112,7 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
                                                  state.statistics.get(), false)};
 
             std::scoped_lock lock{state.mutex};
-            if (pipeline) {
+            if (pipeline && keep_built) {
                 graphics_cache.emplace(key, std::move(pipeline));
             }
             ++state.built;
