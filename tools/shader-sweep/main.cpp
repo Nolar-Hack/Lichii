@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <iterator>
 #include <array>
 #include <bit>
 #include <cstring>
@@ -270,7 +271,25 @@ public:
                       "storage pointer table classification") != 0;
     }
     u32 ReadCbufValue(u32 bank, u32 offset) override {
-        if (Blank('c')) {
+        // SWEEP_CBUF1 names the program's own constant section, read from the game's shader file.
+        if (bank == 1) {
+            static const std::vector<u8> own_constants = [] {
+                std::vector<u8> bytes;
+                if (const char* const path = std::getenv("SWEEP_CBUF1")) {
+                    std::ifstream file{path, std::ios::binary};
+                    bytes.assign(std::istreambuf_iterator<char>{file}, {});
+                }
+                return bytes;
+            }();
+            if (!own_constants.empty()) {
+                u32 value = 0;
+                if (offset + sizeof(value) <= own_constants.size()) {
+                    std::memcpy(&value, own_constants.data() + offset, sizeof(value));
+                }
+                return value;
+            }
+        }
+        if (Blank('c') || (Blank('C') && bank != 1)) {
             return 0;
         }
         return Lookup(cbuf_values, CbufKey(bank, offset), "constant buffer value");
