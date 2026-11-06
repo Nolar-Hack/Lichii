@@ -81,6 +81,8 @@ VK_DEFINE_HANDLE(VmaPool)
     FEATURE(KHR, Maintenance6, MAINTENANCE_6, maintenance6)                                        \
     FEATURE(KHR, PipelineExecutableProperties, PIPELINE_EXECUTABLE_PROPERTIES,                     \
             pipeline_executable_properties)                                                        \
+    FEATURE(KHR, PresentId, PRESENT_ID, present_id)                                                \
+    FEATURE(KHR, PresentWait, PRESENT_WAIT, present_wait)                                          \
     FEATURE(KHR, ShaderQuadControl, SHADER_QUAD_CONTROL, shader_quad_control)                      \
     FEATURE(KHR, ShaderMaximalReconvergence, SHADER_MAXIMAL_RECONVERGENCE,                        \
             shader_maximal_reconvergence)                                                        \
@@ -711,6 +713,11 @@ FN_MAX_LIMIT_LIST
     /// with fast linking.
     bool IsExtGraphicsPipelineLibrarySupported() const {
         return graphics_pipeline_library_enabled;
+    }
+
+    /// Whether presents can carry ids and be waited on until shown (the host frame pacer).
+    bool IsKhrPresentWaitSupported() const {
+        return extensions.present_id && extensions.present_wait;
     }
 
     /// Returns true if the device supports task and mesh shaders (VK_EXT_mesh_shader).
