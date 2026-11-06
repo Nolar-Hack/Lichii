@@ -151,8 +151,16 @@ void TextureCache<P>::RunGarbageCollector() {
             const char* value = std::getenv("EDEN_NX2_TC_MIN_AGE");
             return value != nullptr ? std::strtoull(value, nullptr, 10) : 0ULL;
         }();
-        ticks_to_destroy = (std::max)(ticks_to_destroy, min_age);
         num_iterations = aggressive_mode ? 40 : (high_priority_mode ? 20 : 10);
+        if (aggressive_mode) {
+            // A room that loads thousands of images keeps them all younger than min_age, and the
+            // frames slow down as memory fills, so they stay young: 14 to 27 GiB in 25 s, then
+            // out of memory. Past the critical line only what the last frames used is spared.
+            num_iterations += static_cast<size_t>(
+                (std::min)((total_used_memory - critical_memory) / 16_MiB, u64{1000}));
+        } else {
+            ticks_to_destroy = (std::max)(ticks_to_destroy, min_age);
+        }
     };
     const auto Cleanup = [this, &num_iterations, &high_priority_mode, &aggressive_mode,
                           &evict_old_costly](ImageId image_id) {
