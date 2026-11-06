@@ -856,7 +856,7 @@ void BufferCache<P>::BindComputeStorageBuffer(size_t ssbo_index, u32 cbuf_index,
                                (native_compute && indirect_offset != ~0U);
     channel_state->compute_storage_buffers[ssbo_index] =
         StorageBufferBinding(ssbo_addr, cbuf_index, is_written, native_compute,
-                             indirect_offset != ~0U, mapping_sized);
+                             indirect_offset != ~0U, mapping_sized, true);
     if (indirect_offset != ~0U) {
         TraceTablePointer(true, 0, ssbo_index, cbuf_index, cbuf_offset, indirect_offset, holder,
                           channel_state->compute_storage_buffers[ssbo_index]);
@@ -2958,7 +2958,7 @@ void BufferCache<P>::TraceTablePointer(bool compute, size_t stage, size_t ssbo_i
 template <class P>
 Binding BufferCache<P>::StorageBufferBinding(GPUVAddr ssbo_addr, u32 cbuf_index, bool is_written,
                                              bool native_pointer, bool table_pointer,
-                                             bool mapping_sized) const {
+                                             bool mapping_sized, bool compute) const {
     const GPUVAddr gpu_addr = gpu_memory->Read<u64>(ssbo_addr);
 
     if (gpu_addr == 0) {
@@ -2981,7 +2981,7 @@ Binding BufferCache<P>::StorageBufferBinding(GPUVAddr ssbo_addr, u32 cbuf_index,
     thread_local std::array<std::array<CachedBinding, ways>, 512> binding_cache{};
     const u32 flags =
         (is_written ? 1U : 0U) | (native_pointer ? 2U : 0U) | (table_pointer ? 4U : 0U) |
-        (mapping_sized ? 8U : 0U);
+        (mapping_sized ? 8U : 0U) | (compute ? 16U : 0U);
     const size_t owner = gpu_memory->GetID() + 1;
     const u64 serial = gpu_memory->MapSerial();
     auto& set = binding_cache[((gpu_addr ^ next_qword ^ flags) * 0x9E3779B97F4A7C15ULL) >> 55];
@@ -3050,6 +3050,13 @@ Binding BufferCache<P>::StorageBufferBinding(GPUVAddr ssbo_addr, u32 cbuf_index,
         u32 binding_size = static_cast<u32>(cpu_end - *aligned_device_addr);
         if (is_written) {
             binding_size = aligned_size;
+        }
+        if constexpr (requires { runtime.GetMaxStorageBufferRange(); }) {
+            // A read-only pool's 256 MiB compute cap is above the 128 MiB every device
+            // guarantees. Only those are clamped, so no write is cut off.
+            if (table_pointer && !is_written) {
+                binding_size = (std::min)(binding_size, runtime.GetMaxStorageBufferRange());
+            }
         }
         return Binding{
             .device_addr = *aligned_device_addr,
