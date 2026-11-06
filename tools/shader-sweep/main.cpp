@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <cstdio>
 #include <iterator>
 #include <array>
 #include <bit>
@@ -230,6 +231,10 @@ public:
         if (lowered.required_texture_buffer != ~0U)
             texture_bound = lowered.required_texture_buffer;
         is_proprietary_driver = true;
+    }
+
+    void SetMeshRegisters(const std::array<u32, 3>& registers) {
+        mesh_registers = registers;
     }
 
     u32 EntryPoint() const {
@@ -766,7 +771,16 @@ int main(int argc, char** argv) {
             }
         }
         diagnostic["stage"] = StageNames[static_cast<u32>(env.ShaderStage())];
-        if (env.ShaderStage() == Stage::Task || env.ShaderStage() == Stage::Mesh ||
+        // SWEEP_MESH=a,b,init supplies the registers of a task or mesh program; "env" keeps the
+        // captured ones.
+        const char* const mesh_context = std::getenv("SWEEP_MESH");
+        if (mesh_context != nullptr && std::strcmp(mesh_context, "env") != 0) {
+            std::array<u32, 3> registers{};
+            std::sscanf(mesh_context, "%x,%x,%x", &registers[0], &registers[1], &registers[2]);
+            env.SetMeshRegisters(registers);
+        }
+        if (((env.ShaderStage() == Stage::Task || env.ShaderStage() == Stage::Mesh) &&
+             mesh_context == nullptr) ||
             env.ShaderStage() == Stage::VertexA) {
             throw MissingContext(
                 "Task, mesh and vertex-A require additional pipeline stage context");
