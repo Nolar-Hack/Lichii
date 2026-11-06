@@ -12,7 +12,7 @@ AMD GPUs (RADV). Tested on one machine only: i5-12400, RX 7900 XTX, game build
 
 - Eglantine #609: native compute storage buffers are sized from the mapping only for DLSS and pointer
   tables. On this machine it removed the heavy overexposure in Kokiri Forest.
-- RADV depth-compare fix and a texture collector threshold (`EDEN_NX2_TC_MINIMUM_MIB`).
+- Texture collector threshold (`EDEN_NX2_TC_MINIMUM_MIB`).
 - `EDEN_NX2_SWAP_INTERVAL` is lifted while a video plays, so movies keep their speed under a 30 FPS cap.
 - Dynarmic A64 superblocks and register allocation changes.
 - Ported from other forks: guest RAM release on stop (SmileyTatsu), Vulkan scheduler ownership in the
