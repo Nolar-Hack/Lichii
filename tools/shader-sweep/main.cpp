@@ -98,6 +98,12 @@ V Lookup(const std::map<K, V>& values, K key, std::string_view name) {
     return it->second;
 }
 
+// SWEEP_BLANK lists context kinds to ignore: p(ointers), c(buf), t(ype), f(ormat).
+bool Blank(char kind) {
+    const char* const value = std::getenv("SWEEP_BLANK");
+    return value != nullptr && std::strchr(value, kind) != nullptr;
+}
+
 u64 CbufKey(u32 bank, u32 offset) {
     return (u64{bank} << 32) | offset;
 }
@@ -251,19 +257,34 @@ public:
         return IsNativeProgram();
     }
     bool IsCbufStorageBufferPointer(u32 bank, u32 offset) override {
+        if (Blank('p')) {
+            return true;
+        }
         return Lookup(pointers, CbufKey(bank, offset), "storage pointer classification") != 0;
     }
     bool IsCbufIndirectStorageBufferPointer(u32 bank, u32 offset, u32 indirect) override {
+        if (Blank('p')) {
+            return true;
+        }
         return Lookup(pointers, IndirectCbufKey(bank, offset, indirect),
                       "storage pointer table classification") != 0;
     }
     u32 ReadCbufValue(u32 bank, u32 offset) override {
+        if (Blank('c')) {
+            return 0;
+        }
         return Lookup(cbuf_values, CbufKey(bank, offset), "constant buffer value");
     }
     Shader::TextureType ReadTextureType(u32 handle) override {
+        if (Blank('t')) {
+            return Shader::TextureType::Color2D;
+        }
         return Lookup(texture_types, handle, "texture type");
     }
     Shader::TexturePixelFormat ReadTexturePixelFormat(u32 handle) override {
+        if (Blank('f')) {
+            return Shader::TexturePixelFormat{};
+        }
         return Lookup(texture_formats, handle, "texture pixel format");
     }
     bool IsTexturePixelFormatInteger(u32 handle) override {
