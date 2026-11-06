@@ -16,6 +16,7 @@
 #include <unordered_set>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include "common/container/unordered_map.h"
@@ -195,6 +196,19 @@ private:
 
     ShaderPools main_pools;
     std::mutex spare_pools_mutex;
+
+    /// A cached pipeline the boot translated but does not keep built: its stages' info and
+    /// compressed SPIR-V, so a later draw that needs it skips the translation.
+    struct TranslatedPipeline {
+        GraphicsPipelineCacheKey key;
+        std::array<std::optional<Shader::Info>, Maxwell::MaxShaderStage> infos;
+        std::array<std::vector<u8>, Maxwell::MaxShaderStage> spirv;
+    };
+    std::unique_ptr<GraphicsPipeline> CreateFromTranslation(const GraphicsPipelineCacheKey& key);
+    std::mutex translations_mutex;
+    std::unordered_map<u64, std::unique_ptr<TranslatedPipeline>> translations;
+    size_t translations_bytes{};
+    u64 translation_hits{};
     std::vector<std::shared_ptr<ShaderPools>> spare_pools;
 
     Shader::Profile profile;

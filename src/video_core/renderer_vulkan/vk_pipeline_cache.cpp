@@ -24,6 +24,7 @@
 #include "common/fs/path_util.h"
 #include "common/memory_detect.h"
 #include "common/thread_worker.h"
+#include "common/zstd_compression.h"
 #include "core/core.h"
 #include "shader_recompiler/backend/spirv/emit_spirv.h"
 #include "shader_recompiler/environment.h"
@@ -346,11 +347,15 @@ vk::ShaderModule EmitShaderModule(const Device& device, const Shader::Profile& p
                                  const Shader::RuntimeInfo& runtime_info,
                                  Shader::IR::Program& program, Shader::Backend::Bindings& binding,
                                  u64 shader_hash, size_t stage_index,
-                                 std::span<const u32> reference = {}) {
+                                 std::span<const u32> reference = {},
+                                 std::vector<u32>* code_out = nullptr) {
     const auto code =
         EmitPipelineShader(profile, runtime_info, program, binding, shader_hash, reference);
     device.SaveShader(code);
     vk::ShaderModule module{BuildShader(device, code)};
+    if (code_out != nullptr) {
+        code_out->assign(code.begin(), code.end());
+    }
 
     // Text log + .spv dump. Text log is gated by gpu_log_level != Off; .spv dump
     // is independent and gated only by gpu_log_shader_dumps.
@@ -735,6 +740,17 @@ char PreloadAllMode() {
 
 bool PreloadAllPipelines() {
     return PreloadAllMode() == '1' || PreloadAllMode() == '2';
+}
+
+// With mode 2 the boot translates pipelines it then drops. Their translation is kept in memory,
+// up to this much, so a draw that needs one later skips 5-30 ms on the GPU thread.
+// EDEN_NX2_TRANSLATION_MEMORY_MIB=0 turns it off.
+size_t TranslationMemoryBytes() {
+    static const size_t bytes = [] {
+        const char* value = std::getenv("EDEN_NX2_TRANSLATION_MEMORY_MIB");
+        return (value != nullptr ? std::strtoull(value, nullptr, 10) : 4096ULL) << 20;
+    }();
+    return bytes;
 }
 
 // Graphics pipelines a Switch 2 title keeps before any is evicted: an eighth of system RAM at
@@ -1405,6 +1421,10 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline(
     std::array<vk::ShaderModule, Maxwell::MaxShaderStage> modules;
     std::array<std::optional<Shader::RuntimeInfo>, Maxwell::MaxShaderStage> deferred_runtime_infos;
     std::array<std::vector<u32>, Maxwell::MaxShaderStage> reference_spirv;
+    const bool keep_translation = !build_in_parallel && !emit_pools && PreloadAllMode() == '2' &&
+                                  TranslationMemoryBytes() != 0 && !used_pipelines.empty() &&
+                                  !used_pipelines.contains(hash);
+    std::array<std::vector<u32>, Maxwell::MaxShaderStage> stage_code;
 
     const Shader::IR::Program* previous_stage{};
     Shader::Backend::Bindings binding;
@@ -1430,8 +1450,9 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline(
             }
         } else {
             const auto begin = std::chrono::steady_clock::now();
-            modules[stage_index] = EmitShaderModule(device, profile, runtime_info, program, binding,
-                                                   key.unique_hashes[index], stage_index);
+            modules[stage_index] = EmitShaderModule(
+                device, profile, runtime_info, program, binding, key.unique_hashes[index],
+                stage_index, {}, keep_translation ? &stage_code[stage_index] : nullptr);
             if (build_in_parallel) {
                 AddRuntimeSpirvTime(0, begin);
             }
@@ -1475,6 +1496,26 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline(
             AddRuntimeSpirvTime(1, begin);
             return stage_modules;
         };
+    }
+    if (keep_translation) {
+        auto translated = std::make_unique<TranslatedPipeline>();
+        translated->key = key;
+        size_t bytes = sizeof(TranslatedPipeline);
+        for (size_t stage = 0; stage < infos.size(); ++stage) {
+            if (infos[stage] == nullptr) {
+                continue;
+            }
+            translated->infos[stage] = *infos[stage];
+            translated->spirv[stage] = Common::Compression::CompressDataZSTD(
+                reinterpret_cast<const u8*>(stage_code[stage].data()),
+                stage_code[stage].size() * sizeof(u32), 1);
+            bytes += translated->spirv[stage].size() + sizeof(Shader::Info);
+        }
+        std::scoped_lock lock{translations_mutex};
+        if (translations_bytes + bytes <= TranslationMemoryBytes()) {
+            translations_bytes += bytes;
+            translations.emplace(hash, std::move(translated));
+        }
     }
     Common::ThreadWorker* const thread_worker{build_in_parallel ? &workers : nullptr};
     return std::make_unique<GraphicsPipeline>(
@@ -1545,6 +1586,40 @@ void ReportRuntimePipeline(const char* kind, std::chrono::steady_clock::time_poi
 }
 } // Anonymous namespace
 
+std::unique_ptr<GraphicsPipeline> PipelineCache::CreateFromTranslation(
+    const GraphicsPipelineCacheKey& key) {
+    const TranslatedPipeline* translated{};
+    {
+        std::scoped_lock lock{translations_mutex};
+        const auto it = translations.find(key.Hash());
+        if (it == translations.end() || !(it->second->key == key)) {
+            return nullptr;
+        }
+        translated = it->second.get();
+        if (++translation_hits % 64 == 1) {
+            LOG_INFO(Render_Vulkan, "Translation memory: {} pipelines, {} MiB, {} used",
+                     translations.size(), translations_bytes >> 20, translation_hits);
+        }
+    }
+    std::array<const Shader::Info*, Maxwell::MaxShaderStage> infos{};
+    std::array<vk::ShaderModule, Maxwell::MaxShaderStage> modules;
+    for (size_t stage = 0; stage < infos.size(); ++stage) {
+        if (!translated->infos[stage]) {
+            continue;
+        }
+        infos[stage] = &*translated->infos[stage];
+        const auto bytes = Common::Compression::DecompressDataZSTD(translated->spirv[stage]);
+        std::vector<u32> code(bytes.size() / sizeof(u32));
+        std::memcpy(code.data(), bytes.data(), code.size() * sizeof(u32));
+        modules[stage] = BuildShader(device, code);
+    }
+    return std::make_unique<GraphicsPipeline>(
+        scheduler, buffer_cache, texture_cache, vulkan_pipeline_cache, &shader_notify, device,
+        descriptor_pool, guest_descriptor_queue, descriptor_buffer_ring, &workers, nullptr,
+        render_pass_cache, key, std::move(modules), infos,
+        std::function<std::array<vk::ShaderModule, Maxwell::MaxShaderStage>()>{});
+}
+
 std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline() {
     const auto begin = std::chrono::steady_clock::now();
     SCOPE_EXIT {
@@ -1556,6 +1631,10 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline() {
         }
         ReportRuntimePipeline("Graphics", begin, shaders);
     };
+    if (auto pipeline = CreateFromTranslation(graphics_key)) {
+        QueueVulkanPipelineCacheFlush();
+        return pipeline;
+    }
     GraphicsEnvironments environments;
     GetGraphicsEnvironments(environments, graphics_key.unique_hashes);
 
