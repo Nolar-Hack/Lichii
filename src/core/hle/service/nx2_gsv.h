@@ -1767,6 +1767,22 @@ private:
     void PresentClientBuffer(HLERequestContext& ctx) {
         const auto* w = ctx.CommandBuffer();
         ++m_presents;
+        // EDEN_NX2_HITCH_MS=<ms> logs every gap between two presents at least that long.
+        static const long hitch_ms = [] {
+            const char* value = std::getenv("EDEN_NX2_HITCH_MS");
+            return value == nullptr ? 0L : std::strtol(value, nullptr, 10);
+        }();
+        if (hitch_ms > 0) {
+            static std::chrono::steady_clock::time_point last_present{};
+            const auto now = std::chrono::steady_clock::now();
+            const auto gap =
+                std::chrono::duration_cast<std::chrono::milliseconds>(now - last_present).count();
+            if (m_presents > 1 && gap >= hitch_ms) {
+                LOG_WARNING(Service, "Hitch: present #{} came {} ms after the previous one",
+                            m_presents, gap);
+            }
+            last_present = now;
+        }
         if (Common::DkbFrameTrace::Enabled()) {
             m_vsync->trace_present.store(m_presents, std::memory_order_relaxed);
         }
