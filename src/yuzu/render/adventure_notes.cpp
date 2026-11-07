@@ -30,6 +30,9 @@
 #include <QPen>
 #include <QProgressBar>
 #include <QScrollArea>
+#include <QSignalBlocker>
+#include <QStringList>
+#include <QTabBar>
 #include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -58,6 +61,7 @@ struct Field {
 
 struct View {
     QString name;
+    QString tab;
     std::vector<Field> fields;
     bool checklist;
     int collection = -1; ///< The collection this view lists by zone, if any.
@@ -133,7 +137,9 @@ std::unique_ptr<GameNotes> LoadModule(u64 program_id) {
     game->play_time_hash = static_cast<u32>(ParseHex(root[QStringLiteral("play_time")]));
     for (const QJsonValue& entry : root[QStringLiteral("views")].toArray()) {
         const QJsonObject object = entry.toObject();
-        View view{object[QStringLiteral("name")].toString(), {},
+        View view{object[QStringLiteral("name")].toString(),
+                  object[QStringLiteral("tab")].toString(),
+                  {},
                   object[QStringLiteral("checklist")].toBool(),
                   object[QStringLiteral("collection")].toInt(-1)};
         for (const QJsonValue& item : object[QStringLiteral("fields")].toArray()) {
@@ -270,6 +276,10 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
         "QComboBox::drop-down { border: none; width: 16px; }"
         "QComboBox QAbstractItemView { color: #f1efe6; background: #171b17; border: 1px solid "
         "#3a4436; selection-background-color: #4c6a35; outline: none; }"
+        "QTabBar { background: transparent; }"
+        "QTabBar::tab { color: #9aa390; background: transparent; padding: 3px 8px; border: none; "
+        "font-size: 11px; }"
+        "QTabBar::tab:selected { color: #ffffff; border-bottom: 2px solid #9fd36a; }"
         "QProgressBar { background: rgba(255,255,255,20); border: none; border-radius: 2px; "
         "max-height: 4px; min-height: 4px; }"
         "QProgressBar::chunk { background: #9fd36a; border-radius: 2px; }"
@@ -300,13 +310,20 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
     top->addLayout(titles, 1);
     top->addWidget(collapse, 0, Qt::AlignTop);
 
-    views = new QComboBox(this);
-    views->addItem(QStringLiteral("Global"));
+    tabs = new QTabBar(this);
+    tabs->setDrawBase(false);
+    tabs->setExpanding(false);
+    tabs->addTab(QStringLiteral("Global"));
     if (game) {
+        QStringList names;
         for (const View& view : game->views) {
-            views->addItem(view.name);
+            if (!names.contains(view.tab)) {
+                names.push_back(view.tab);
+                tabs->addTab(view.tab);
+            }
         }
     }
+    views = new QComboBox(this);
 
     body = new QWidget;
     rows = new QGridLayout(body);
@@ -324,6 +341,7 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
     layout->setContentsMargins(14, 11, 10, 12);
     layout->setSpacing(7);
     layout->addLayout(top);
+    layout->addWidget(tabs);
     layout->addWidget(views);
     layout->addWidget(scroll, 1);
     grip = new QLabel(QStringLiteral("⌟"), this);
@@ -333,11 +351,13 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
     layout->addWidget(grip, 0, Qt::AlignRight);
     setMinimumWidth(230);
 
+    connect(tabs, &QTabBar::currentChanged, this, &AdventureNotes::FillViews);
     connect(views, &QComboBox::currentIndexChanged, this, &AdventureNotes::Refresh);
     connect(collapse, &QToolButton::clicked, this, [this] {
         const bool visible = !scroll->isVisible();
         scroll->setVisible(visible);
-        views->setVisible(visible);
+        tabs->setVisible(visible);
+        views->setVisible(visible && views->count() > 1);
         grip->setVisible(visible);
         collapse->setText(visible ? QStringLiteral("–") : QStringLiteral("+"));
         sized_by_hand = false;
@@ -346,6 +366,21 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &AdventureNotes::Refresh);
     timer->start(3000);
+    FillViews();
+}
+
+void AdventureNotes::FillViews() {
+    const QSignalBlocker blocker{views};
+    views->clear();
+    if (game && tabs->currentIndex() > 0) {
+        const QString tab = tabs->tabText(tabs->currentIndex());
+        for (size_t index = 0; index < game->views.size(); ++index) {
+            if (game->views[index].tab == tab) {
+                views->addItem(game->views[index].name, static_cast<int>(index));
+            }
+        }
+    }
+    views->setVisible(views->count() > 1);
     Refresh();
 }
 
@@ -407,7 +442,7 @@ void AdventureNotes::Refresh() {
         rows->addWidget(bar, row, 0, 1, 2);
         ++row;
     };
-    const int selected = views->currentIndex() - 1;
+    const int selected = views->count() > 0 ? views->currentData().toInt() : -1;
     if (selected < 0) {
         // Global: what each checklist holds, to see where something is missing.
         for (const View& view : game->views) {

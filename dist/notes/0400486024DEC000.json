@@ -10,7 +10,7 @@
  "play_time": "0xce97845e",
  "views": [
   {
-   "name": "Stats · Summary",
+   "name": "Summary",
    "checklist": false,
    "fields": [
     {
@@ -38,10 +38,11 @@
      "hash": "0x0b7f5726",
      "kind": "count"
     }
-   ]
+   ],
+   "tab": "Stats"
   },
   {
-   "name": "Stats · Combat",
+   "name": "Combat",
    "checklist": false,
    "fields": [
     {
@@ -69,10 +70,11 @@
      "hash": "0xf5f1954d",
      "kind": "count"
     }
-   ]
+   ],
+   "tab": "Stats"
   },
   {
-   "name": "Stats · Exploration",
+   "name": "Exploration",
    "checklist": false,
    "fields": [
     {
@@ -110,10 +112,11 @@
      "hash": "0x4766a777",
      "kind": "count"
     }
-   ]
+   ],
+   "tab": "Stats"
   },
   {
-   "name": "Stats · Actions",
+   "name": "Actions",
    "checklist": false,
    "fields": [
     {
@@ -166,7 +169,8 @@
      "hash": "0xfd680ada",
      "kind": "count"
     }
-   ]
+   ],
+   "tab": "Stats"
   },
   {
    "name": "Songs",
@@ -237,7 +241,8 @@
      "hash": "0x01c20002",
      "kind": "flag"
     }
-   ]
+   ],
+   "tab": "World"
   },
   {
    "name": "Quest items",
@@ -288,7 +293,8 @@
      "hash": "0xeec383f5",
      "kind": "flag"
     }
-   ]
+   ],
+   "tab": "World"
   },
   {
    "name": "Visited places",
@@ -474,27 +480,32 @@
      "hash": "0x2e975eed",
      "kind": "flag"
     }
-   ]
+   ],
+   "tab": "World"
   },
   {
    "name": "Gold Skulltulas by area",
    "checklist": false,
-   "collection": 0
+   "collection": 0,
+   "tab": "World"
   },
   {
    "name": "Heart Pieces on the map",
    "checklist": false,
-   "collection": 1
+   "collection": 1,
+   "tab": "World"
   },
   {
    "name": "Heart Containers",
    "checklist": false,
-   "collection": 2
+   "collection": 2,
+   "tab": "World"
   },
   {
    "name": "Silver Rupees",
    "checklist": false,
-   "collection": 3
+   "collection": 3,
+   "tab": "World"
   },
   {
    "name": "Great Deku Tree",
@@ -510,7 +521,8 @@
      "hash": "0x06c51ff2",
      "kind": "flag"
     }
-   ]
+   ],
+   "tab": "Dungeons"
   },
   {
    "name": "Dodongo Cavern",
@@ -526,7 +538,8 @@
      "hash": "0x8b93edf9",
      "kind": "flag"
     }
-   ]
+   ],
+   "tab": "Dungeons"
   },
   {
    "name": "Lord Jabu-Jabu's Belly",
@@ -542,7 +555,8 @@
      "hash": "0x9a2218db",
      "kind": "flag"
     }
-   ]
+   ],
+   "tab": "Dungeons"
   },
   {
    "name": "Forest Temple",
@@ -568,7 +582,8 @@
      "hash": "0x90237092",
      "kind": "number"
     }
-   ]
+   ],
+   "tab": "Dungeons"
   },
   {
    "name": "Fire Temple",
@@ -594,7 +609,8 @@
      "hash": "0x1df11487",
      "kind": "number"
     }
-   ]
+   ],
+   "tab": "Dungeons"
   },
   {
    "name": "Water Temple",
@@ -620,7 +636,8 @@
      "hash": "0x877bdcee",
      "kind": "number"
     }
-   ]
+   ],
+   "tab": "Dungeons"
   },
   {
    "name": "Shadow Temple",
@@ -646,7 +663,8 @@
      "hash": "0x5edda9e3",
      "kind": "number"
     }
-   ]
+   ],
+   "tab": "Dungeons"
   },
   {
    "name": "Spirit Temple",
@@ -672,7 +690,8 @@
      "hash": "0x79eeec8e",
      "kind": "number"
     }
-   ]
+   ],
+   "tab": "Dungeons"
   },
   {
    "name": "Bottom of the Well",
@@ -693,7 +712,8 @@
      "hash": "0x7dd79d10",
      "kind": "number"
     }
-   ]
+   ],
+   "tab": "Dungeons"
   },
   {
    "name": "Ice Cavern",
@@ -709,7 +729,8 @@
      "hash": "0xea1846e6",
      "kind": "flag"
     }
-   ]
+   ],
+   "tab": "Dungeons"
   },
   {
    "name": "Gerudo Proving Grounds",
@@ -720,7 +741,8 @@
      "hash": "0xea9786f5",
      "kind": "number"
     }
-   ]
+   ],
+   "tab": "Dungeons"
   },
   {
    "name": "Inside Ganondorf's Castle",
@@ -736,7 +758,8 @@
      "hash": "0xfbfd2910",
      "kind": "number"
     }
-   ]
+   ],
+   "tab": "Dungeons"
   },
   {
    "name": "Gerudo Fortress",
@@ -747,7 +770,8 @@
      "hash": "0x3a28b6a4",
      "kind": "number"
     }
-   ]
+   ],
+   "tab": "Dungeons"
   }
  ],
  "collections": [
