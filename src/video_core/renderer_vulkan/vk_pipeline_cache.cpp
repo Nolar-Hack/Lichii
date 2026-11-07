@@ -1256,6 +1256,9 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
         background_pipelines.Stop();
     } else {
         background_pipelines.Start(std::clamp<size_t>(num_pipeline_workers / 4, 1, 2));
+        warm_cancel = false;
+        warm_stop_callback = std::make_unique<std::stop_callback<std::function<void()>>>(
+            stop_loading, std::function<void()>{[this] { warm_cancel = true; }});
         StartComputeWarm(title_id);
         StartGraphicsWarm(title_id);
     }
@@ -1463,7 +1466,7 @@ void PipelineCache::StartComputeWarm(u64 title_id) {
                                            file_entries, read_ok](std::stop_token stop) {
             Common::SetCurrentThreadName("VkComputeWarm");
             Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
-            while (!stop.stop_requested()) {
+            while (!stop.stop_requested() && !warm_cancel) {
                 const size_t index = progress->next.fetch_add(1);
                 if (index >= entries->size()) {
                     break;
@@ -1493,7 +1496,7 @@ void PipelineCache::StartComputeWarm(u64 title_id) {
             }
             if (progress->running.fetch_sub(1) == 1) {
                 shader_notify.SetWarmProgress(0, 0, 0);
-                if (read_ok && !stop.stop_requested() &&
+                if (read_ok && !stop.stop_requested() && !warm_cancel &&
                     progress->built + progress->failed >= entries->size()) {
                     WriteWarmMarker(warm_file, title_file, device, file_entries);
                 }
@@ -1581,7 +1584,7 @@ void PipelineCache::StartGraphicsWarm(u64 title_id) {
                                             title_file](std::stop_token stop) {
             Common::SetCurrentThreadName("VkGraphicsWarm");
             Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
-            while (!stop.stop_requested() && !compute_warm_done) {
+            while (!stop.stop_requested() && !warm_cancel && !compute_warm_done) {
                 std::this_thread::sleep_for(std::chrono::milliseconds{200});
             }
             {
@@ -1593,7 +1596,7 @@ void PipelineCache::StartGraphicsWarm(u64 title_id) {
             static const GuessMissing guess{};
             GraphicsPipelineLibraryCache::SetNoRetainOnThisThread(true);
             ShaderPools pools;
-            while (!stop.stop_requested()) {
+            while (!stop.stop_requested() && !warm_cancel) {
                 FileEnvironment env;
                 GraphicsPipelineCacheKey key{};
                 {
@@ -1658,7 +1661,7 @@ void PipelineCache::StartGraphicsWarm(u64 title_id) {
                     std::scoped_lock lock{reader->mutex};
                     complete = !reader->failed && reader->end == reader->position;
                 }
-                if (complete && !stop.stop_requested()) {
+                if (complete && !stop.stop_requested() && !warm_cancel) {
                     WriteWarmMarker(warm_file, title_file, device, reader->read);
                 }
                 LOG_INFO(Render_Vulkan,
