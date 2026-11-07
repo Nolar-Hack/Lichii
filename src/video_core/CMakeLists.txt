@@ -581,3 +581,7 @@ if (ENABLE_NVIDIA_DLSS)
 endif()
 
 create_target_directory_groups(video_core)
+
+if (MINGW)
+    target_link_libraries(video_core PRIVATE dwmapi)
+endif()
