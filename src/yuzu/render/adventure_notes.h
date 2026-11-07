@@ -49,10 +49,12 @@ private:
     void LoadGame();
     void ShowMessage(const QString& text);
     void CreateModule();
+    void CheckFiles();
 
     std::unique_ptr<GameNotes> game;
     u64 program_id = 0;
     std::filesystem::file_time_type module_time{};
+    std::filesystem::file_time_type save_time{};
     QLabel* header = nullptr;
     QLabel* subtitle = nullptr;
     QScrollArea* scroll = nullptr;
