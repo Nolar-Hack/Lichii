@@ -202,12 +202,20 @@ std::vector<u8> ComputeEntry(const LoweredCode& lowered, const ComputeControl& c
     return out;
 }
 
-std::vector<u8> GraphicsEnv(u32 stage, const LoweredCode& lowered, std::span<const u8> program) {
+std::vector<u8> GraphicsEnv(u32 stage, const LoweredCode& lowered, std::span<const u8> program,
+                            std::span<const u8> control) {
     const auto sph = program.first(80);
     const u32 bound = lowered.texture_buffer != ~0U ? lowered.texture_buffer
                                                      : (stage == 0 ? 0U : 2U);
-    // Constant buffer bank 1 = the last 256 bytes of the program allocation.
-    const auto bank1 = program.last(std::min<size_t>(256, program.size()));
+    // Constant buffer bank 1 starts at control word 16 and runs to the end of the allocation; its
+    // jump tables can be longer than the usual 256 bytes.
+    auto bank1 = program.last(std::min<size_t>(256, program.size()));
+    if (control.size() >= 68) {
+        const u32 offset = Get<u32>(control, 64);
+        if (offset != 0 && offset % 256 == 0 && offset < program.size()) {
+            bank1 = program.subspan(offset);
+        }
+    }
     const size_t cbuf_count = (bank1.size() & ~size_t{3}) / 4;
     const u32 w1 = Get<u32>(sph, 4), w2 = Get<u32>(sph, 8), w3 = Get<u32>(sph, 12);
     const u64 local_memory =

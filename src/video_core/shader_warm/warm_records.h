@@ -80,7 +80,8 @@ std::vector<u8> ComputeEntry(const LoweredCode& lowered, const ComputeControl& c
 
 /// Env record of a single-stage graphics entry (stage 0 vertex or 4 fragment), without the
 /// leading env count and the key. `program` is the extracted allocation (header + code).
-std::vector<u8> GraphicsEnv(u32 stage, const LoweredCode& lowered, std::span<const u8> program);
+std::vector<u8> GraphicsEnv(u32 stage, const LoweredCode& lowered, std::span<const u8> program,
+                            std::span<const u8> control = {});
 
 /// The key of a graphics entry: `template_key` with this stage's hash slot (vertex 1,
 /// fragment 5) and, for vertex, the attribute types.
