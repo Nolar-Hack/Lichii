@@ -13,6 +13,7 @@ class MainWindow;
 class QGridLayout;
 class QLabel;
 class QScrollArea;
+class QTabBar;
 class QComboBox;
 class QTimer;
 class QToolButton;
@@ -46,6 +47,7 @@ private:
     void Refresh();
     void StartDrag(QPoint position);
     void FitContent();
+    void FillViews();
 
     std::unique_ptr<GameNotes> game;
     QLabel* header = nullptr;
@@ -53,6 +55,7 @@ private:
     QScrollArea* scroll = nullptr;
     QLabel* grip = nullptr;
     bool sized_by_hand = false;
+    QTabBar* tabs = nullptr;
     QComboBox* views = nullptr;
     QWidget* body = nullptr;
     QGridLayout* rows = nullptr;
