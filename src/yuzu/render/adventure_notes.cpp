@@ -11,12 +11,12 @@
 #include <unordered_map>
 #include <vector>
 
+#include <QComboBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPainter>
-#include <QTabBar>
 #include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -30,43 +30,27 @@
 namespace {
 namespace fs = std::filesystem;
 
-// The tabs a record appears in.
-enum Tab : u32 { Summary = 1, Combat = 2, Exploration = 4, Actions = 8 };
-
-struct Record {
-    u32 hash;
-    const char* title;
-    u32 tabs;
+enum class FieldKind : u8 {
+    Count,  ///< 64-bit value at the offset the table holds.
+    Flag,   ///< Boolean held in the table.
+    Number, ///< 32-bit value held in the table.
 };
 
-// The game's Int64 save keys. Names from the public demo of https://onif.info/ocarina/.
-constexpr std::array<Record, 23> OcarinaRecords{{
-    {0x8bc1257a, "Morts", Summary | Combat},
-    {0xf7cb0ee2, "Ennemis vaincus", Summary | Combat},
-    {0x15ea6aa2, "Skulltulas d'or", Summary | Exploration},
-    {0x4766a777, "Coffres", Summary | Exploration},
-    {0x0b7f5726, "Rubis ramassés", Summary},
-    {0xcb183657, "Pots cassés", Actions},
-    {0x824b47b1, "Herbe coupée", Actions},
-    {0x30bbe1d8, "Pierres soulevées", Exploration},
-    {0x2a24450a, "Coups d'épée", Combat},
-    {0x4ac3ff5d, "Roulades", Actions},
-    {0xa6454431, "Sauts", Actions},
-    {0x3eeafadd, "Distance parcourue", Exploration},
-    {0x392c7b86, "Temps sous l'eau", Exploration},
-    {0xe8c057bc, "Vol de cocotte", Exploration},
-    {0x1957b8c5, "Objets utilisés", Combat},
-    {0xf5f1954d, "Magie dépensée", Combat},
-    {0xd457ee3a, "Ocarina joué", Actions},
-    {0x64b98a4e, "Discussions", Actions},
-    {0xc0be46bc, "Discussions avec Navi", Actions},
-    {0x70d7014b, "Pierres à potins", Exploration},
-    {0x3f31ad53, "Mini-jeux", Actions},
-    {0xcaa00e60, "Pêche", Actions},
-    {0xfd680ada, "Amiibo", Actions},
-}};
-constexpr u32 OcarinaPlayTime = 0xce97845e;
+struct Field {
+    u32 hash;
+    const char* title;
+    FieldKind kind;
+};
 
+struct View {
+    const char* name;
+    std::span<const Field> fields;
+    bool checklist; ///< Counted in the Global view.
+};
+
+#include "render/adventure_notes_ocarina.inc"
+
+constexpr u32 OcarinaPlayTime = 0xce97845e;
 } // Anonymous namespace
 
 /// A game whose save the panel can read: hash + value tables at 0x28, as in progress.sav.
@@ -76,13 +60,13 @@ struct GameNotes {
     const char* folder;    ///< Its folder in the save directory.
     const char* save_file; ///< The file in each of its slot folders.
     u32 play_time_hash;
-    std::span<const Record> records;
+    std::span<const View> views;
 };
 
 namespace {
 constexpr std::array<GameNotes, 1> Games{{
     {0x0400486024DEC000ULL, "The Legend of Zelda: Ocarina of Time", "0400486024DEC000",
-     "progress.sav", OcarinaPlayTime, OcarinaRecords},
+     "progress.sav", OcarinaPlayTime, OcarinaViews},
 }};
 
 const GameNotes* FindGame(u64 program_id) {
@@ -115,38 +99,49 @@ std::optional<fs::path> NewestSave(const GameNotes& game) {
     return newest;
 }
 
-std::optional<std::unordered_map<u32, s64>> ReadRecords(const GameNotes& game,
-                                                        const fs::path& path) {
-    std::ifstream file{path, std::ios::binary};
-    std::vector<char> raw{std::istreambuf_iterator<char>{file}, {}};
-    if (raw.size() < 0x30) {
-        return std::nullopt;
+class SaveTable {
+public:
+    explicit SaveTable(const fs::path& path) {
+        std::ifstream file{path, std::ios::binary};
+        raw.assign(std::istreambuf_iterator<char>{file}, {});
+        if (raw.size() < 0x30) {
+            return;
+        }
+        const size_t end = Word(8);
+        for (size_t pos = 0x28; pos + 8 <= raw.size() && pos < end; pos += 8) {
+            table.try_emplace(Word(pos), Word(pos + 4));
+        }
     }
-    const auto u32_at = [&raw](size_t offset) {
+
+    [[nodiscard]] bool Valid() const {
+        return !table.empty();
+    }
+
+    [[nodiscard]] s64 Read(u32 hash, FieldKind kind) const {
+        const auto it = table.find(hash);
+        if (it == table.end()) {
+            return 0;
+        }
+        if (kind != FieldKind::Count) {
+            return it->second;
+        }
+        s64 value{};
+        if (size_t{it->second} + sizeof(value) <= raw.size()) {
+            std::memcpy(&value, raw.data() + it->second, sizeof(value));
+        }
+        return value;
+    }
+
+private:
+    [[nodiscard]] u32 Word(size_t offset) const {
         u32 value;
         std::memcpy(&value, raw.data() + offset, sizeof(value));
         return value;
-    };
+    }
+
+    std::vector<char> raw;
     std::unordered_map<u32, u32> table;
-    const size_t end = u32_at(8);
-    for (size_t pos = 0x28; pos + 8 <= raw.size() && pos < end; pos += 8) {
-        table.try_emplace(u32_at(pos), u32_at(pos + 4));
-    }
-    std::unordered_map<u32, s64> records;
-    const auto read = [&](u32 hash) {
-        const auto it = table.find(hash);
-        if (it != table.end() && size_t{it->second} + sizeof(s64) <= raw.size()) {
-            s64 value;
-            std::memcpy(&value, raw.data() + it->second, sizeof(value));
-            records.emplace(hash, value);
-        }
-    };
-    read(game.play_time_hash);
-    for (const Record& record : game.records) {
-        read(record.hash);
-    }
-    return records;
-}
+};
 } // Anonymous namespace
 
 bool AdventureNotes::Supports(u64 program_id) {
@@ -159,10 +154,10 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
     setWindowFlags(Qt::FramelessWindowHint | Qt::Tool);
     setStyleSheet(QStringLiteral(
         "QLabel { color: #e8e8e0; font-size: 11px; background: transparent; }"
-        "QTabBar { background: transparent; }"
-        "QTabBar::tab { color: #a8a8a0; background: transparent; padding: 2px 7px; border: none; "
-        "font-size: 10px; }"
-        "QTabBar::tab:selected { color: #ffffff; border-bottom: 1px solid #9fd36a; }"
+        "QComboBox { color: #ffffff; background: rgba(255,255,255,18); border: none; "
+        "border-radius: 4px; padding: 1px 6px; font-size: 11px; }"
+        "QComboBox QAbstractItemView { color: #ffffff; background: #1c201c; "
+        "selection-background-color: #3d5a2a; }"
         "QToolButton { color: #c8c8c0; background: transparent; border: none; font-size: 12px; }"));
 
     header = new QLabel(this);
@@ -174,11 +169,12 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
     top->addWidget(header, 1);
     top->addWidget(collapse);
 
-    tabs = new QTabBar(this);
-    tabs->setDrawBase(false);
-    tabs->setExpanding(false);
-    for (const char* name : {"Résumé", "Combat", "Exploration", "Actions"}) {
-        tabs->addTab(QString::fromUtf8(name));
+    views = new QComboBox(this);
+    views->addItem(QStringLiteral("Global"));
+    if (game) {
+        for (const View& view : game->views) {
+            views->addItem(QString::fromUtf8(view.name));
+        }
     }
 
     body = new QWidget(this);
@@ -191,15 +187,15 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
     layout->setContentsMargins(10, 6, 8, 8);
     layout->setSpacing(3);
     layout->addLayout(top);
-    layout->addWidget(tabs);
+    layout->addWidget(views);
     layout->addWidget(body);
     layout->setSizeConstraint(QLayout::SetFixedSize);
 
-    connect(tabs, &QTabBar::currentChanged, this, &AdventureNotes::Refresh);
+    connect(views, &QComboBox::currentIndexChanged, this, &AdventureNotes::Refresh);
     connect(collapse, &QToolButton::clicked, this, [this] {
         const bool visible = !body->isVisible();
         body->setVisible(visible);
-        tabs->setVisible(visible);
+        views->setVisible(visible);
         collapse->setText(visible ? QStringLiteral("–") : QStringLiteral("+"));
     });
     timer = new QTimer(this);
@@ -214,32 +210,54 @@ void AdventureNotes::Refresh() {
         delete item;
     }
     const auto path = game ? NewestSave(*game) : std::nullopt;
-    const auto records = path ? ReadRecords(*game, *path) : std::nullopt;
-    if (!records) {
+    if (!path) {
         header->setText(tr("Aucune sauvegarde trouvée"));
         return;
     }
-    const auto find = [&records](u32 hash) {
-        const auto it = records->find(hash);
-        return it != records->end() ? it->second : s64{0};
-    };
-    const s64 seconds = find(game->play_time_hash);
+    const SaveTable save{*path};
+    if (!save.Valid()) {
+        header->setText(tr("Sauvegarde illisible"));
+        return;
+    }
+    const s64 seconds = save.Read(game->play_time_hash, FieldKind::Count);
     header->setText(QStringLiteral("<b>%1 h %2</b> &nbsp;<span style='color:#a8a8a0'>%3</span>")
                         .arg(seconds / 3600)
                         .arg((seconds % 3600) / 60, 2, 10, QLatin1Char('0'))
                         .arg(QString::fromStdString(path->parent_path().filename().string())));
-    const u32 tab = 1U << std::max(tabs->currentIndex(), 0);
     int row = 0;
-    for (const Record& record : game->records) {
-        if ((record.tabs & tab) == 0) {
-            continue;
-        }
-        auto* name = new QLabel(QString::fromUtf8(record.title), body);
-        auto* value = new QLabel(QStringLiteral("<b>%1</b>").arg(find(record.hash)), body);
-        value->setAlignment(Qt::AlignRight);
+    const auto add = [this, &row](const QString& title, const QString& value) {
+        auto* name = new QLabel(title, body);
+        auto* text = new QLabel(value, body);
+        text->setAlignment(Qt::AlignRight);
         rows->addWidget(name, row, 0);
-        rows->addWidget(value, row, 1);
+        rows->addWidget(text, row, 1);
         ++row;
+    };
+    const int selected = views->currentIndex() - 1;
+    if (selected < 0) {
+        // Global: what each checklist holds, to see where something is missing.
+        for (const View& view : game->views) {
+            if (!view.checklist) {
+                continue;
+            }
+            int done = 0, total = 0;
+            for (const Field& field : view.fields) {
+                if (field.kind == FieldKind::Flag) {
+                    ++total;
+                    done += save.Read(field.hash, field.kind) != 0 ? 1 : 0;
+                }
+            }
+            add(QString::fromUtf8(view.name), QStringLiteral("<b>%1 / %2</b>").arg(done).arg(total));
+        }
+        return;
+    }
+    for (const Field& field : game->views[static_cast<size_t>(selected)].fields) {
+        const s64 value = save.Read(field.hash, field.kind);
+        const QString shown = field.kind == FieldKind::Flag
+                                  ? (value != 0 ? QStringLiteral("<b style='color:#9fd36a'>oui</b>")
+                                                : QStringLiteral("<span style='color:#d08a6a'>non</span>"))
+                                  : QStringLiteral("<b>%1</b>").arg(value);
+        add(QString::fromUtf8(field.title), shown);
     }
 }
 
