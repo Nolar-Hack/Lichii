@@ -10,7 +10,7 @@
 class MainWindow;
 class QGridLayout;
 class QLabel;
-class QTabBar;
+class QComboBox;
 class QTimer;
 class QToolButton;
 class QWidget;
@@ -44,7 +44,7 @@ private:
 
     const GameNotes* game = nullptr;
     QLabel* header = nullptr;
-    QTabBar* tabs = nullptr;
+    QComboBox* views = nullptr;
     QWidget* body = nullptr;
     QGridLayout* rows = nullptr;
     QToolButton* collapse = nullptr;
