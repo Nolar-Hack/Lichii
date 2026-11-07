@@ -391,20 +391,28 @@ void AdventureNotes::FitContent() {
     // As tall as what it shows, up to a limit: a short view stays small.
     constexpr int MaxListHeight = 330;
     rows->activate();
-    const int wanted = std::min(body->sizeHint().height(), MaxListHeight);
+    const int wanted = std::min(rows->sizeHint().height(), MaxListHeight);
     scroll->setMinimumHeight(wanted);
     scroll->setMaximumHeight(wanted);
-    adjustSize();
+    layout()->activate();
+    resize(width(), layout()->sizeHint().height());
 }
 
 void AdventureNotes::Refresh() {
     SCOPE_EXIT {
         FitContent();
     };
+    // A QGridLayout keeps its rows once they exist, and with them the height of the longest view.
     while (QLayoutItem* item = rows->takeAt(0)) {
         delete item->widget();
         delete item;
     }
+    delete rows;
+    rows = new QGridLayout(body);
+    rows->setContentsMargins(2, 4, 8, 2);
+    rows->setHorizontalSpacing(12);
+    rows->setVerticalSpacing(5);
+    rows->setColumnStretch(0, 1);
     const auto path = game ? NewestSave(*game) : std::nullopt;
     if (!path) {
         header->setText(tr("No save found"));
