@@ -9,6 +9,7 @@
 #include <optional>
 #include <span>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <QComboBox>
@@ -48,6 +49,12 @@ struct View {
     bool checklist; ///< Counted in the Global view.
 };
 
+/// A zone's collectibles, kept in the save as 64-bit actor keys once taken.
+struct Zone {
+    const char* name;
+    std::span<const u64> tokens;
+};
+
 #include "render/adventure_notes_ocarina.inc"
 
 constexpr u32 OcarinaPlayTime = 0xce97845e;
@@ -61,12 +68,13 @@ struct GameNotes {
     const char* save_file; ///< The file in each of its slot folders.
     u32 play_time_hash;
     std::span<const View> views;
+    std::span<const Zone> zones;
 };
 
 namespace {
 constexpr std::array<GameNotes, 1> Games{{
     {0x0400486024DEC000ULL, "The Legend of Zelda: Ocarina of Time", "0400486024DEC000",
-     "progress.sav", OcarinaPlayTime, OcarinaViews},
+     "progress.sav", OcarinaPlayTime, OcarinaViews, OcarinaZones},
 }};
 
 const GameNotes* FindGame(u64 program_id) {
@@ -111,6 +119,16 @@ public:
         for (size_t pos = 0x28; pos + 8 <= raw.size() && pos < end; pos += 8) {
             table.try_emplace(Word(pos), Word(pos + 4));
         }
+        for (size_t pos = end & ~size_t{7}; pos + 8 <= raw.size(); pos += 8) {
+            u64 key;
+            std::memcpy(&key, raw.data() + pos, sizeof(key));
+            keys.insert(key);
+        }
+    }
+
+    [[nodiscard]] int CountKeys(std::span<const u64> wanted) const {
+        return static_cast<int>(std::ranges::count_if(
+            wanted, [this](u64 key) { return keys.contains(key); }));
     }
 
     [[nodiscard]] bool Valid() const {
@@ -141,6 +159,7 @@ private:
 
     std::vector<char> raw;
     std::unordered_map<u32, u32> table;
+    std::unordered_set<u64> keys;
 };
 } // Anonymous namespace
 
@@ -249,15 +268,42 @@ void AdventureNotes::Refresh() {
             }
             add(QString::fromUtf8(view.name), QStringLiteral("<b>%1 / %2</b>").arg(done).arg(total));
         }
+        int tokens = 0, token_total = 0;
+        for (const Zone& zone : game->zones) {
+            tokens += save.CountKeys(zone.tokens);
+            token_total += static_cast<int>(zone.tokens.size());
+        }
+        add(tr("Skulltulas d'or"), QStringLiteral("<b>%1 / %2</b>").arg(tokens).arg(token_total));
         return;
     }
-    for (const Field& field : game->views[static_cast<size_t>(selected)].fields) {
+    const View& view = game->views[static_cast<size_t>(selected)];
+    if (view.fields.empty()) {
+        for (const Zone& zone : game->zones) {
+            const int found = save.CountKeys(zone.tokens);
+            const int total = static_cast<int>(zone.tokens.size());
+            const char* const color = found == total ? "#9fd36a" : "#ffffff";
+            add(QString::fromUtf8(zone.name),
+                QStringLiteral("<b style='color:%1'>%2 / %3</b>")
+                    .arg(QString::fromLatin1(color))
+                    .arg(found)
+                    .arg(total));
+        }
+        return;
+    }
+    for (const Field& field : view.fields) {
         const s64 value = save.Read(field.hash, field.kind);
         const QString shown = field.kind == FieldKind::Flag
                                   ? (value != 0 ? QStringLiteral("<b style='color:#9fd36a'>oui</b>")
                                                 : QStringLiteral("<span style='color:#d08a6a'>non</span>"))
                                   : QStringLiteral("<b>%1</b>").arg(value);
         add(QString::fromUtf8(field.title), shown);
+    }
+    for (const Zone& zone : game->zones) {
+        if (std::strcmp(zone.name, view.name) == 0) {
+            add(tr("Skulltulas d'or"), QStringLiteral("<b>%1 / %2</b>")
+                                           .arg(save.CountKeys(zone.tokens))
+                                           .arg(zone.tokens.size()));
+        }
     }
 }
 
