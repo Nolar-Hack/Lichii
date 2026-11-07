@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 #include "common/logging.h"
 #include "video_core/nx2_debug_control.h"
@@ -38,6 +39,14 @@ std::optional<double> QueryRefreshPeriodNs() {
     if (EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &mode) &&
         mode.dmDisplayFrequency > 1) {
         return 1e9 / mode.dmDisplayFrequency;
+    }
+#else
+    // Nothing here reports the refresh rate on Linux: the launcher passes it.
+    if (const char* const hz = std::getenv("EDEN_NX2_HOST_REFRESH_HZ")) {
+        const double rate = std::strtod(hz, nullptr);
+        if (rate > 1.0) {
+            return 1e9 / rate;
+        }
     }
 #endif
     return std::nullopt;
