@@ -203,7 +203,8 @@ std::vector<u8> ComputeEntry(const LoweredCode& lowered, const ComputeControl& c
 }
 
 std::vector<u8> GraphicsEnv(u32 stage, const LoweredCode& lowered, std::span<const u8> program,
-                            std::span<const u8> control) {
+                            std::span<const u8> control,
+                            const std::array<u32, 3>* mesh_registers) {
     const auto sph = program.first(80);
     const u32 bound = lowered.texture_buffer != ~0U ? lowered.texture_buffer
                                                      : (stage == 0 ? 0U : 2U);
@@ -230,7 +231,38 @@ std::vector<u8> GraphicsEnv(u32 stage, const LoweredCode& lowered, std::span<con
         Put<u32>(out, Get<u32>(bank1, i * 4));
     }
     PutBytes(out, sph);
+    if (mesh_registers != nullptr) {
+        for (const u32 value : *mesh_registers) {
+            Put<u32>(out, value);
+        }
+        out.resize(out.size() + 80); // the primitive header: none without a geometry slot program
+    }
     return out;
+}
+
+std::array<u32, 3> MeshRegisters(std::span<const u8> mesh_control,
+                                 std::span<const u8> task_control) {
+    constexpr size_t Needed = 0x64;
+    std::array<u32, 3> registers{0, 0x2000000, 0};
+    if (mesh_control.size() >= Needed) {
+        const u32 topology = mesh_control[0x5f] == 3 ? 4 : 0;
+        registers[0] = topology | (u32{Get<u16>(mesh_control, 0x60)} << 4) |
+                       (u32{Get<u16>(mesh_control, 0x62)} << 13);
+    }
+    const auto threads_source = task_control.size() >= Needed ? task_control : mesh_control;
+    const u32 threads = threads_source.size() >= Needed ? Get<u16>(threads_source, 0x58) : 32;
+    const u32 lines = task_control.size() >= Needed ? Get<u16>(task_control, 0x5a) / 128 : 2;
+    registers[2] = threads | (lines << 12) | (lines << 22);
+    return registers;
+}
+
+GraphicsKey MeshEntryKey(const GraphicsKey& template_key, u64 task_hash, u64 mesh_hash) {
+    GraphicsKey key = template_key;
+    const u64 no_hash = 0;
+    std::memcpy(key.data() + 1 * 8, task_hash != 0 ? &task_hash : &mesh_hash, sizeof(u64));
+    std::memcpy(key.data() + 3 * 8, task_hash != 0 ? &mesh_hash : &no_hash, sizeof(u64));
+    std::memcpy(key.data() + AttributeTypesOffset, &no_hash, sizeof(u64));
+    return key;
 }
 
 GraphicsKey GraphicsEntryKey(u32 stage, const GraphicsKey& template_key, u64 stage_hash,
