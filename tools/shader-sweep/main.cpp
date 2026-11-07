@@ -278,6 +278,7 @@ public:
     bool HasNativeInstructions() const override {
         return IsNativeProgram();
     }
+    /// Recorded storage pointer classification, or the bank's guess when guessing is on.
     bool IsCbufStorageBufferPointer(u32 bank, u32 offset) override {
         if (Blank('p')) {
             return true;
@@ -391,6 +392,8 @@ public:
     std::vector<u64> code;
 
 private:
+    /// The recorded value for `key`. With guessing on, a missing value counts as a guessed read and
+    /// returns `guess`; otherwise it throws.
     template <typename K, typename V>
     V Find(const std::map<K, V>& values, K key, std::string_view name, V guess) {
         if (guesses.enabled && !values.contains(key)) {
@@ -603,6 +606,9 @@ Shader::RuntimeInfo Runtime(std::span<const u8> key, Stage stage, Json& assumpti
 }
 } // namespace
 
+/// Parses the command line, reads the program (and its environment and pipeline key when given),
+/// translates it and writes the SPIR-V or lowered code. Prints a JSON report; the exit code is 2
+/// for bad input and 1 for a failed translation.
 int main(int argc, char** argv) {
     Json diagnostic{{"schema_version", 1}, {"status", "error"},           {"phase", "input"},
                     {"stage", nullptr},    {"input_format", nullptr},     {"source_bytes", 0},
