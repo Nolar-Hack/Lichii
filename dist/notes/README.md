@@ -1,18 +1,49 @@
 # Adventure notes modules
 
-A module adds a game to the Adventure notes panel. Open the panel in a game and press
-"Create a module for this game": it writes `notes/<PROGRAM ID>.json` in the user folder and opens
-the folder. Edit the file: the panel reloads it when you save, and shows any JSON error with its
-line. No rebuild is needed. A `notes` folder next to the program is read when the user has none.
+A module adds a game to the Adventure notes panel. The emulator knows no save format: the module
+reads the save and returns what to show. Adding a game never needs a rebuild.
 
-- `save`: `folder` in the save directory, `file` in each slot folder, `layout`. Only
-  `gamedata-table` is read so far: hash and value pairs from 0x28.
-- `play_time`: the 32-bit hash of the play time.
-- `views`: `name`, `tab` (the tab it sits in), `checklist` (counted in Global), then `fields` or a `collection` index.
-- `fields`: `title`, 32-bit `hash`, `kind`: `count` (64-bit value at the offset), `flag` or `number`.
-- `collections`: `name`, then `zones` of `name` and 64-bit `keys`, counted when in the save.
+Open the panel in a game and press "Create a module for this game": it writes
+`notes/<PROGRAM ID>.js` in the user folder and opens the folder. Edit the file: the panel reloads
+it when you save, and shows any error with its line. If the save file's name is wrong, the panel
+lists the files the game saves. A `notes` folder next to the program is read when the user has none.
 
-- `summary`: Global lines, `title` and `terms` of `hash`, `collection` or `constant`, with `scale`.
+## A module
 
-A view whose name matches a zone also shows that zone's collections. Keep game content out of a
-module: identifiers and short names only.
+```js
+var game = { title: "My game", folder: "0100000000010000", file: "progress.sav" };
+
+function read(save) {
+    const view = new DataView(save.data);
+    return {
+        title: "Shown large at the top",
+        tabs: [{ name: "Stats", views: [{ name: "Summary", rows: [
+            { title: "Coins", value: view.getUint32(0x10, true) },
+            { title: "Boss beaten", check: true },
+            { title: "Stars", done: 12, total: 120 },
+        ] }] }],
+    };
+}
+```
+
+`accent` in `game` is the panel's colour. `keys` in the result, a few `{ title, value }`, stay in
+view at the top of the wide layout. `folder` is the game's folder in the save directory. `file` is looked for there and in each slot
+folder, and the newest copy is used. `read` runs when the save changes. A tab with several views
+shows a list to pick one. A row has a `value`, a tick (`check`) or a bar (`done`, `total`).
+
+## What a module can use
+
+- `save.data`: the file as an ArrayBuffer. `save.slot`: the name of its folder.
+- `notes.file(name)`: another file of the same save, as an ArrayBuffer.
+- `notes.unzip(data, offset, end)`: inflates a zlib stream.
+- `notes.utf8(data, offset, size)`: text, up to the first zero.
+- `notes.include(name)`: runs a shared library from `notes/lib`, like `gamedata-table.js`.
+
+A module reaches nothing else: no other file, no network. It is stopped after 5 seconds. Throwing
+an Error shows its message in the panel, which suits a save version the module does not know.
+
+Prefer typed arrays and plain objects in long loops: `Map` and `Set` search their keys one by one
+in this engine, and `DataView` calls are slow. Keep game content out of a module: identifiers and
+short names only.
+
+The Pokopia module's layout comes from [PokoHex](https://github.com/berichan/PokoHex) (GPL-3.0).
