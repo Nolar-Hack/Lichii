@@ -8,8 +8,12 @@
 #include "common/common_types.h"
 
 class MainWindow;
+class QGridLayout;
 class QLabel;
+class QTabBar;
 class QTimer;
+class QToolButton;
+class QWidget;
 
 struct GameNotes;
 
@@ -31,13 +35,20 @@ protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
+    bool eventFilter(QObject* object, QEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
 
 private:
     void Refresh();
+    void StartDrag(QPoint position);
 
     const GameNotes* game = nullptr;
-    QLabel* label = nullptr;
+    QLabel* header = nullptr;
+    QTabBar* tabs = nullptr;
+    QWidget* body = nullptr;
+    QGridLayout* rows = nullptr;
+    QToolButton* collapse = nullptr;
     QTimer* timer = nullptr;
     QPoint drag_start;
+    bool dragging = false;
 };
