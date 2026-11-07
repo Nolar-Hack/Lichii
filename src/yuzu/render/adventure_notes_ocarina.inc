@@ -125,41 +125,41 @@ constexpr std::array<Field, 4> DungeonForestTemple{{
     {0xe704f9b4, "Carte", FieldKind::Flag},
     {0xf240eeb2, "Boussole", FieldKind::Flag},
     {0x427333a0, "Clé du boss", FieldKind::Flag},
-    {0x90237092, "Petites clés", FieldKind::Number},
+    {0x90237092, "Petites clés en main (5 dans le donjon)", FieldKind::Number},
 }};
 
 constexpr std::array<Field, 4> DungeonFireTemple{{
     {0x5b3ac0ba, "Carte", FieldKind::Flag},
     {0x0aa068b6, "Boussole", FieldKind::Flag},
     {0xb72d73df, "Clé du boss", FieldKind::Flag},
-    {0x1df11487, "Petites clés", FieldKind::Number},
+    {0x1df11487, "Petites clés en main (8 dans le donjon)", FieldKind::Number},
 }};
 
 constexpr std::array<Field, 4> DungeonWaterTemple{{
     {0x4a4402ab, "Carte", FieldKind::Flag},
     {0x2e82c8fe, "Boussole", FieldKind::Flag},
     {0x79daf80a, "Clé du boss", FieldKind::Flag},
-    {0x877bdcee, "Petites clés", FieldKind::Number},
+    {0x877bdcee, "Petites clés en main (4 dans le donjon)", FieldKind::Number},
 }};
 
 constexpr std::array<Field, 4> DungeonShadowTemple{{
     {0xf6177b93, "Carte", FieldKind::Flag},
     {0x1e2feec5, "Boussole", FieldKind::Flag},
     {0xc33c66cf, "Clé du boss", FieldKind::Flag},
-    {0x5edda9e3, "Petites clés", FieldKind::Number},
+    {0x5edda9e3, "Petites clés en main (5 dans le donjon)", FieldKind::Number},
 }};
 
 constexpr std::array<Field, 4> DungeonSpiritTemple{{
     {0xb85002ba, "Carte", FieldKind::Flag},
     {0x9bd1181c, "Boussole", FieldKind::Flag},
     {0x1984c03f, "Clé du boss", FieldKind::Flag},
-    {0x79eeec8e, "Petites clés", FieldKind::Number},
+    {0x79eeec8e, "Petites clés en main (5 dans le donjon)", FieldKind::Number},
 }};
 
 constexpr std::array<Field, 3> DungeonBottomOfTheWell{{
     {0x77c47ec9, "Carte", FieldKind::Flag},
     {0x9d6efaac, "Boussole", FieldKind::Flag},
-    {0x7dd79d10, "Petites clés", FieldKind::Number},
+    {0x7dd79d10, "Petites clés en main (2 dans le donjon)", FieldKind::Number},
 }};
 
 constexpr std::array<Field, 2> DungeonIceCavern{{
@@ -168,21 +168,18 @@ constexpr std::array<Field, 2> DungeonIceCavern{{
 }};
 
 constexpr std::array<Field, 1> DungeonGerudoTrainingGround{{
-    {0xea9786f5, "Petites clés", FieldKind::Number},
+    {0xea9786f5, "Petites clés en main (9 dans le donjon)", FieldKind::Number},
 }};
 
 constexpr std::array<Field, 2> DungeonInsideGanonCastle{{
     {0x2fd59293, "Clé du boss", FieldKind::Flag},
-    {0xfbfd2910, "Petites clés", FieldKind::Number},
+    {0xfbfd2910, "Petites clés en main (1 dans le donjon)", FieldKind::Number},
 }};
 
 constexpr std::array<Field, 1> DungeonGerudoFortress{{
-    {0x3a28b6a4, "Petites clés", FieldKind::Number},
+    {0x3a28b6a4, "Petites clés en main (11 dans le donjon)", FieldKind::Number},
 }};
 
-constexpr std::array<Field, 0> DungeonFinalBattleField{{
-
-}};
 
 constexpr std::array<u64, 3> TokensBottomOfTheWell{0x35fb354fac262d36ULL, 0x6789388e9fb9c92cULL, 0xa8d6182a5c956e16ULL};
 constexpr std::array<u64, 2> TokensDeathMountainCrater{0x58c75badf059ca54ULL, 0xfcd7f04dcf755e8eULL};
@@ -245,7 +242,70 @@ constexpr std::array<Zone, 29> OcarinaZones{{
     {"Village Goron", TokensGoronCity},
 }};
 
-constexpr std::array<View, 22> OcarinaViews{{
+
+constexpr std::array<u64, 2> HeartDeathMountainCrater{0x0a564328faf93c71ULL, 0x8f5f3d3321aeb7cdULL};
+constexpr std::array<u64, 1> HeartDeathMountainTrail{0x09ecb6a0150fee97ULL};
+constexpr std::array<u64, 1> HeartDesertColossus{0x92feab9a9810c619ULL};
+constexpr std::array<u64, 1> HeartGerudoValley{0xdfd66c63357cdea7ULL};
+constexpr std::array<u64, 1> HeartGraveyard{0x1df0dbf50c1732b7ULL};
+constexpr std::array<u64, 2> HeartHyruleField{0x88358af5b5300aa9ULL, 0xbaec91d6ed8dd96bULL};
+constexpr std::array<u64, 2> HeartKakarikoVillage{0xb9d0070b468f26d2ULL, 0xf8c7601da7dd887eULL};
+constexpr std::array<u64, 2> HeartZoraFountain{0x6f736fc80f7b0acaULL, 0xac2e26b5ec7da3a2ULL};
+constexpr std::array<u64, 2> HeartZoraRiver{0x3a23b59eaedc0510ULL, 0x9efabd5b0516c341ULL};
+constexpr std::array<Zone, 9> OcarinaHearts{{
+    {"Cimetière", HeartGraveyard},
+    {"Cocorico", HeartKakarikoVillage},
+    {"Colosse du Désert", HeartDesertColossus},
+    {"Cratère du Péril", HeartDeathMountainCrater},
+    {"Fontaine Zora", HeartZoraFountain},
+    {"Plaine d'Hyrule", HeartHyruleField},
+    {"Rivière Zora", HeartZoraRiver},
+    {"Sentier du Péril", HeartDeathMountainTrail},
+    {"Vallée Gerudo", HeartGerudoValley},
+}};
+
+constexpr std::array<u64, 1> ContainerDodongoCavern{0x5262cea56c53554dULL};
+constexpr std::array<u64, 1> ContainerFireTemple{0x8389cafb1277d318ULL};
+constexpr std::array<u64, 1> ContainerForestTemple{0xff11593a22778e7eULL};
+constexpr std::array<u64, 1> ContainerInsideJabuJabuBelly{0xf45f5319d88e7ac7ULL};
+constexpr std::array<u64, 1> ContainerInsideTheDekuTree{0xf914fa367471a3e3ULL};
+constexpr std::array<u64, 1> ContainerShadowTemple{0xf43ccb260f5576dcULL};
+constexpr std::array<u64, 1> ContainerSpiritTemple{0x41811f125b1eedd5ULL};
+constexpr std::array<u64, 1> ContainerWaterTemple{0xc835e1d03656bf46ULL};
+constexpr std::array<Zone, 8> OcarinaContainers{{
+    {"Arbre Mojo", ContainerInsideTheDekuTree},
+    {"Caverne Dodongo", ContainerDodongoCavern},
+    {"Temple de l'Eau", ContainerWaterTemple},
+    {"Temple de l'Esprit", ContainerSpiritTemple},
+    {"Temple de l'Ombre", ContainerShadowTemple},
+    {"Temple de la Forêt", ContainerForestTemple},
+    {"Temple du Feu", ContainerFireTemple},
+    {"Ventre de Jabu-Jabu", ContainerInsideJabuJabuBelly},
+}};
+
+constexpr std::array<u64, 5> SilverBottomOfTheWell{0x688ba7ae82f7d174ULL, 0x7e5292413b721c0aULL, 0xc7ac3c87b8dc3044ULL, 0xd3fca295920aa56fULL, 0xda81b3878c1deae3ULL};
+constexpr std::array<u64, 20> SilverGerudoTrainingGround{0x0d9ab445c687af84ULL, 0x0e741bc26e2c0697ULL, 0x1da71f60ac02ec12ULL, 0x1eeb356140284a18ULL, 0x4ab44ec9fa62841eULL, 0x5ac73f3cfe149f5eULL, 0x77f9feaac7f28534ULL, 0x8912e1b8bd3d49dcULL, 0x8d3d7bd0aff53a04ULL, 0x97634124f088e7d8ULL, 0xb3d7d0be8bee7bd0ULL, 0xb72a84ab06a5d986ULL, 0xc7f53b9e70b909baULL, 0xcf018cf2c0d86a7eULL, 0xd48bf013feb195abULL, 0xd504cad432df6c2dULL, 0xddb014e95fd519b3ULL, 0xe09a166c192d8995ULL, 0xe88c4cd905220761ULL, 0xef4878d7320239f1ULL};
+constexpr std::array<u64, 10> SilverIceCavern{0x2d106890d9d01132ULL, 0x5af593e74aea3040ULL, 0x5f68e628665584d6ULL, 0x648096aeed9365ddULL, 0x662045239dbbe63aULL, 0x7633db754459d19dULL, 0x8d204d97a565b776ULL, 0xa6b41aa8827c975cULL, 0xc066e1f9eb643d09ULL, 0xffa5887336519e97ULL};
+constexpr std::array<u64, 20> SilverInsideGanonCastle{0x0feb38734016a7b5ULL, 0x17694182d88f582eULL, 0x347ae3e058ec62d6ULL, 0x35cf343928020bebULL, 0x3faf930737b10184ULL, 0x659c7851d834bd73ULL, 0x696eb2dc0f8b34e8ULL, 0x6bc709478dcf5743ULL, 0x705fb316106b0b6cULL, 0x75167baf8c4eb3cdULL, 0x7727295e5ac90fbcULL, 0x8b8068232007db4dULL, 0x9b10adddb3cbc666ULL, 0xa3f9adac302829e1ULL, 0xa97840fb17023abcULL, 0xb37960fe859686feULL, 0xb4e81d00864d3e86ULL, 0xcd4013a340fcd219ULL, 0xed8772ded0ab12deULL, 0xf1fa4913c187d43aULL};
+constexpr std::array<u64, 15> SilverShadowTemple{0x1fcdf4e539750d87ULL, 0x63889e3987a9150aULL, 0x743cfd29ef59b171ULL, 0x7ef1165429858ebcULL, 0x8241637fe67c146aULL, 0x85424388dd3c8590ULL, 0x88b04072b4b7644fULL, 0xb17ab77bd26f6bdfULL, 0xbd3f9202723b1441ULL, 0xbd85570337f0a11dULL, 0xc0db58037d189f1cULL, 0xe09902944c952db7ULL, 0xf49ad43d8a7275c9ULL, 0xfa4541fe1a2d0d44ULL, 0xfbeaa8e3bc7e4090ULL};
+constexpr std::array<u64, 15> SilverSpiritTemple{0x02f8a8f3bf0abf64ULL, 0x0f6a8ef57d0bbd4fULL, 0x123a06e00ac830d0ULL, 0x175745649864338fULL, 0x188041154d2d8cf7ULL, 0x3630c03fe6fa04c3ULL, 0x5c4828587b70f44cULL, 0x65332cb0488e7429ULL, 0x822af9b03cfc75d6ULL, 0xa76777d06730e9dbULL, 0xab91261b450b353aULL, 0xb19312d1918376b4ULL, 0xd12664a0540d94e8ULL, 0xeeb9d8960e2c1c92ULL, 0xf61cbd8464f4f4d8ULL};
+constexpr std::array<Zone, 6> OcarinaSilver{{
+    {"Caverne de Glace", SilverIceCavern},
+    {"Château de Ganon", SilverInsideGanonCastle},
+    {"Gymnase Gerudo", SilverGerudoTrainingGround},
+    {"Puits", SilverBottomOfTheWell},
+    {"Temple de l'Esprit", SilverSpiritTemple},
+    {"Temple de l'Ombre", SilverShadowTemple},
+}};
+
+constexpr std::array<Collection, 4> OcarinaCollections{{
+    {"Skulltulas d'or", OcarinaZones},
+    {"Quarts de cœur", OcarinaHearts},
+    {"Réceptacles de cœur", OcarinaContainers},
+    {"Rubis d'argent", OcarinaSilver},
+}};
+
+constexpr std::array<View, 23> OcarinaViews{{
     {"Stats · Résumé", StatsSummary, false},
     {"Stats · Combat", StatsCombat, false},
     {"Stats · Exploration", StatsExploration, false},
@@ -253,7 +313,10 @@ constexpr std::array<View, 22> OcarinaViews{{
     {"Chansons", Songs, true},
     {"Quêtes", Quest, true},
     {"Lieux visités", Places, true},
-    {"Skulltulas par zone", {}, false},
+    {"Skulltulas par zone", {}, false, 0},
+    {"Quarts de cœur (sur la carte)", {}, false, 1},
+    {"Réceptacles de cœur", {}, false, 2},
+    {"Rubis d'argent", {}, false, 3},
     {"Arbre Mojo", DungeonInsideTheDekuTree, true},
     {"Caverne Dodongo", DungeonDodongoCavern, true},
     {"Ventre de Jabu-Jabu", DungeonInsideJabuJabuBelly, true},
@@ -267,5 +330,4 @@ constexpr std::array<View, 22> OcarinaViews{{
     {"Gymnase Gerudo", DungeonGerudoTrainingGround, true},
     {"Château de Ganon", DungeonInsideGanonCastle, true},
     {"Forteresse Gerudo", DungeonGerudoFortress, true},
-    {"Combat final", DungeonFinalBattleField, true},
 }};
