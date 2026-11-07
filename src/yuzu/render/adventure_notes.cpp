@@ -46,13 +46,20 @@ struct Field {
 struct View {
     const char* name;
     std::span<const Field> fields;
-    bool checklist; ///< Counted in the Global view.
+    bool checklist;      ///< Counted in the Global view.
+    int collection = -1; ///< The Collection this view lists by zone, if any.
 };
 
 /// A zone's collectibles, kept in the save as 64-bit actor keys once taken.
 struct Zone {
     const char* name;
     std::span<const u64> tokens;
+};
+
+/// Collectibles of one kind, zone by zone.
+struct Collection {
+    const char* name;
+    std::span<const Zone> zones;
 };
 
 #include "render/adventure_notes_ocarina.inc"
@@ -68,13 +75,13 @@ struct GameNotes {
     const char* save_file; ///< The file in each of its slot folders.
     u32 play_time_hash;
     std::span<const View> views;
-    std::span<const Zone> zones;
+    std::span<const Collection> collections;
 };
 
 namespace {
 constexpr std::array<GameNotes, 1> Games{{
     {0x0400486024DEC000ULL, "The Legend of Zelda: Ocarina of Time", "0400486024DEC000",
-     "progress.sav", OcarinaPlayTime, OcarinaViews, OcarinaZones},
+     "progress.sav", OcarinaPlayTime, OcarinaViews, OcarinaCollections},
 }};
 
 const GameNotes* FindGame(u64 program_id) {
@@ -268,17 +275,20 @@ void AdventureNotes::Refresh() {
             }
             add(QString::fromUtf8(view.name), QStringLiteral("<b>%1 / %2</b>").arg(done).arg(total));
         }
-        int tokens = 0, token_total = 0;
-        for (const Zone& zone : game->zones) {
-            tokens += save.CountKeys(zone.tokens);
-            token_total += static_cast<int>(zone.tokens.size());
+        for (const Collection& collection : game->collections) {
+            int found = 0, total = 0;
+            for (const Zone& zone : collection.zones) {
+                found += save.CountKeys(zone.tokens);
+                total += static_cast<int>(zone.tokens.size());
+            }
+            add(QString::fromUtf8(collection.name),
+                QStringLiteral("<b>%1 / %2</b>").arg(found).arg(total));
         }
-        add(tr("Skulltulas d'or"), QStringLiteral("<b>%1 / %2</b>").arg(tokens).arg(token_total));
         return;
     }
     const View& view = game->views[static_cast<size_t>(selected)];
-    if (view.fields.empty()) {
-        for (const Zone& zone : game->zones) {
+    if (view.collection >= 0) {
+        for (const Zone& zone : game->collections[static_cast<size_t>(view.collection)].zones) {
             const int found = save.CountKeys(zone.tokens);
             const int total = static_cast<int>(zone.tokens.size());
             const char* const color = found == total ? "#9fd36a" : "#ffffff";
@@ -298,11 +308,13 @@ void AdventureNotes::Refresh() {
                                   : QStringLiteral("<b>%1</b>").arg(value);
         add(QString::fromUtf8(field.title), shown);
     }
-    for (const Zone& zone : game->zones) {
-        if (std::strcmp(zone.name, view.name) == 0) {
-            add(tr("Skulltulas d'or"), QStringLiteral("<b>%1 / %2</b>")
-                                           .arg(save.CountKeys(zone.tokens))
-                                           .arg(zone.tokens.size()));
+    for (const Collection& collection : game->collections) {
+        for (const Zone& zone : collection.zones) {
+            if (std::strcmp(zone.name, view.name) == 0) {
+                add(QString::fromUtf8(collection.name), QStringLiteral("<b>%1 / %2</b>")
+                                                            .arg(save.CountKeys(zone.tokens))
+                                                            .arg(zone.tokens.size()));
+            }
         }
     }
 }
