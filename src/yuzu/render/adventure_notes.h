@@ -12,6 +12,7 @@
 class MainWindow;
 class QGridLayout;
 class QLabel;
+class QScrollArea;
 class QComboBox;
 class QTimer;
 class QToolButton;
@@ -47,6 +48,8 @@ private:
 
     std::unique_ptr<GameNotes> game;
     QLabel* header = nullptr;
+    QLabel* subtitle = nullptr;
+    QScrollArea* scroll = nullptr;
     QComboBox* views = nullptr;
     QWidget* body = nullptr;
     QGridLayout* rows = nullptr;
