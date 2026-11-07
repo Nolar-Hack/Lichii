@@ -68,6 +68,19 @@ struct Collection {
     QString name;
     std::vector<Zone> zones;
 };
+
+/// One term of a Global line: a table value, a collection's count or a constant, times a scale.
+struct Term {
+    u32 hash = 0;
+    int collection = -1;
+    s64 constant = 0;
+    s64 scale = 1;
+};
+
+struct Summary {
+    QString title;
+    std::vector<Term> terms;
+};
 } // Anonymous namespace
 
 /// A module: what to read in a game's save. The only layout so far is "gamedata-table".
@@ -78,6 +91,7 @@ struct GameNotes {
     u32 play_time_hash = 0;
     std::vector<View> views;
     std::vector<Collection> collections;
+    std::vector<Summary> summaries;
 };
 
 namespace {
@@ -137,6 +151,18 @@ std::unique_ptr<GameNotes> LoadModule(u64 program_id) {
             collection.zones.push_back(std::move(zone));
         }
         game->collections.push_back(std::move(collection));
+    }
+    for (const QJsonValue& entry : root[QStringLiteral("summary")].toArray()) {
+        const QJsonObject object = entry.toObject();
+        Summary summary{object[QStringLiteral("title")].toString(), {}};
+        for (const QJsonValue& item : object[QStringLiteral("terms")].toArray()) {
+            const QJsonObject term = item.toObject();
+            summary.terms.push_back({static_cast<u32>(ParseHex(term[QStringLiteral("hash")])),
+                                     term[QStringLiteral("collection")].toInt(-1),
+                                     term[QStringLiteral("constant")].toInteger(),
+                                     term[QStringLiteral("scale")].toInteger(1)});
+        }
+        game->summaries.push_back(std::move(summary));
     }
     return game;
 }
@@ -334,6 +360,23 @@ void AdventureNotes::Refresh() {
             }
             add(collection.name,
                 QStringLiteral("<b>%1 / %2</b>").arg(found).arg(total));
+        }
+        for (const Summary& summary : game->summaries) {
+            s64 value = 0;
+            for (const Term& term : summary.terms) {
+                s64 part = term.constant;
+                if (term.hash != 0) {
+                    part = save.Read(term.hash, FieldKind::Number);
+                } else if (term.collection >= 0) {
+                    part = 0;
+                    for (const Zone& zone :
+                         game->collections[static_cast<size_t>(term.collection)].zones) {
+                        part += save.CountKeys(zone.keys);
+                    }
+                }
+                value += part * (term.hash != 0 || term.collection >= 0 ? term.scale : 1);
+            }
+            add(summary.title, QStringLiteral("<b>%1</b>").arg(value));
         }
         return;
     }
