@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <memory>
+
 #include <QWidget>
 
 #include "common/common_types.h"
@@ -18,14 +20,15 @@ class QWidget;
 struct GameNotes;
 
 /// A game's adventure records, read from its newest save. Nothing is written: the numbers change
-/// when the game saves. A game is added with one entry of the table in adventure_notes.cpp.
+/// when the game saves. A game is added with a module, notes/<program id>.json in the user folder.
 class AdventureNotes : public QWidget {
     Q_OBJECT
 
 public:
     AdventureNotes(MainWindow* parent, u64 program_id);
+    ~AdventureNotes() override;
 
-    /// Whether the panel knows this game's save.
+    /// Whether a module exists for this game.
     [[nodiscard]] static bool Supports(u64 program_id);
 
 signals:
@@ -42,7 +45,7 @@ private:
     void Refresh();
     void StartDrag(QPoint position);
 
-    const GameNotes* game = nullptr;
+    std::unique_ptr<GameNotes> game;
     QLabel* header = nullptr;
     QComboBox* views = nullptr;
     QWidget* body = nullptr;
