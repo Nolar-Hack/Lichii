@@ -226,7 +226,6 @@ private:
     EmissionBudget emission_budget;
 
     GraphicsPipelineCacheKey graphics_key{};
-    u64 vertex_attribute_types{}; ///< graphics_key's attribute types before the program's mask
     GraphicsPipeline* current_pipeline{};
 
     /// EDEN_NX2_GPL: shader libraries shared by the graphics pipelines. Declared before the
