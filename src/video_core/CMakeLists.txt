@@ -600,3 +600,6 @@ add_custom_target(native_preparation_revision
     VERBATIM)
 add_dependencies(video_core native_preparation_revision)
 target_include_directories(video_core PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+if (MINGW)
+    target_link_libraries(video_core PRIVATE dwmapi)
+endif()
