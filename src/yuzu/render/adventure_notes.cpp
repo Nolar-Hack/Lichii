@@ -2,40 +2,32 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <algorithm>
-#include <array>
 #include <memory>
 #include <string>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <optional>
-#include <span>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
 
 #include <fmt/format.h>
 
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDesktopServices>
-#include <QFile>
+#include <QBoxLayout>
+#include <QColor>
 #include <QGridLayout>
 #include <QHBoxLayout>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonParseError>
 #include <QLabel>
 #include <QLinearGradient>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPen>
 #include <QProgressBar>
 #include <QScrollArea>
+#include <QSettings>
 #include <QSignalBlocker>
 #include <QStringList>
-#include <QTabBar>
 #include <QTimer>
 #include <QToolButton>
 #include <QUrl>
@@ -44,73 +36,22 @@
 
 #include "common/common_types.h"
 #include "common/fs/path_util.h"
-#include "common/scope_exit.h"
 #include "main_window.h"
 #include "render/adventure_notes.h"
 
 namespace {
 namespace fs = std::filesystem;
 
-enum class FieldKind : u8 {
-    Count,  ///< 64-bit value at the offset the table holds.
-    Flag,   ///< Boolean held in the table.
-    Number, ///< 32-bit value held in the table.
-};
+fs::path NotesDir() {
+    return Common::FS::GetEdenPath(Common::FS::EdenPath::EdenDir) / "notes";
+}
 
-struct Field {
-    u32 hash;
-    QString title;
-    FieldKind kind;
-};
+fs::path ShippedDir() {
+    return fs::path{QCoreApplication::applicationDirPath().toStdString()} / "notes";
+}
 
-struct View {
-    QString name;
-    QString tab;
-    std::vector<Field> fields;
-    bool checklist;
-    int collection = -1; ///< The collection this view lists by zone, if any.
-};
-
-/// A zone's collectibles, kept in the save as 64-bit actor keys once taken.
-struct Zone {
-    QString name;
-    std::vector<u64> keys;
-};
-
-struct Collection {
-    QString name;
-    std::vector<Zone> zones;
-};
-
-/// One term of a Global line: a table value, a collection's count or a constant, times a scale.
-struct Term {
-    u32 hash = 0;
-    int collection = -1;
-    s64 constant = 0;
-    s64 scale = 1;
-};
-
-struct Summary {
-    QString title;
-    std::vector<Term> terms;
-};
-} // Anonymous namespace
-
-/// A module: what to read in a game's save. The only layout so far is "gamedata-table".
-struct GameNotes {
-    QString title;
-    std::string folder;
-    std::string save_file;
-    u32 play_time_hash = 0;
-    std::vector<View> views;
-    std::vector<Collection> collections;
-    std::vector<Summary> summaries;
-};
-
-namespace {
 fs::path UserModule(u64 program_id) {
-    return Common::FS::GetEdenPath(Common::FS::EdenPath::EdenDir) / "notes" /
-           fmt::format("{:016X}.json", program_id);
+    return NotesDir() / fmt::format("{:016X}.js", program_id);
 }
 
 /// The user's module, else the one shipped next to the program.
@@ -120,196 +61,106 @@ fs::path FindModule(u64 program_id) {
     if (fs::exists(user, ec)) {
         return user;
     }
-    const fs::path shipped = fs::path{QCoreApplication::applicationDirPath().toStdString()} /
-                             "notes" / user.filename();
+    const fs::path shipped = ShippedDir() / user.filename();
     return fs::exists(shipped, ec) ? shipped : user;
 }
 
-u64 ParseHex(const QJsonValue& value) {
-    return value.toString().toULongLong(nullptr, 16);
+QStringList LibraryDirs() {
+    return {QString::fromStdString((NotesDir() / "lib").string()),
+            QString::fromStdString((ShippedDir() / "lib").string())};
 }
 
-FieldKind ParseKind(const QString& kind) {
-    if (kind == QStringLiteral("flag")) {
-        return FieldKind::Flag;
-    }
-    return kind == QStringLiteral("number") ? FieldKind::Number : FieldKind::Count;
+fs::path SaveRoot() {
+    return Common::FS::GetEdenPath(Common::FS::EdenPath::NANDDir) / "user" / "save" /
+           "0000000000000000";
 }
 
-std::unique_ptr<GameNotes> LoadModule(const fs::path& path, QString& error) {
-    QFile file{QString::fromStdString(path.string())};
-    if (!file.open(QIODevice::ReadOnly)) {
-        return nullptr;
-    }
-    QJsonParseError parse;
-    const QByteArray text = file.readAll();
-    const QJsonObject root = QJsonDocument::fromJson(text, &parse).object();
-    if (parse.error != QJsonParseError::NoError) {
-        const int line = static_cast<int>(text.left(parse.offset).count('\n')) + 1;
-        error = QStringLiteral("Module error, line %1: %2").arg(line).arg(parse.errorString());
-        return nullptr;
-    }
-    const QJsonObject save = root[QStringLiteral("save")].toObject();
-    if (save[QStringLiteral("layout")].toString() != QStringLiteral("gamedata-table")) {
-        error = QStringLiteral("Module error: save layout must be gamedata-table");
-        return nullptr;
-    }
-    auto game = std::make_unique<GameNotes>();
-    game->title = root[QStringLiteral("title")].toString();
-    game->folder = save[QStringLiteral("folder")].toString().toStdString();
-    game->save_file = save[QStringLiteral("file")].toString().toStdString();
-    game->play_time_hash = static_cast<u32>(ParseHex(root[QStringLiteral("play_time")]));
-    for (const QJsonValue& entry : root[QStringLiteral("views")].toArray()) {
-        const QJsonObject object = entry.toObject();
-        View view{object[QStringLiteral("name")].toString(),
-                  object[QStringLiteral("tab")].toString(),
-                  {},
-                  object[QStringLiteral("checklist")].toBool(),
-                  object[QStringLiteral("collection")].toInt(-1)};
-        for (const QJsonValue& item : object[QStringLiteral("fields")].toArray()) {
-            const QJsonObject field = item.toObject();
-            view.fields.push_back({static_cast<u32>(ParseHex(field[QStringLiteral("hash")])),
-                                   field[QStringLiteral("title")].toString(),
-                                   ParseKind(field[QStringLiteral("kind")].toString())});
-        }
-        game->views.push_back(std::move(view));
-    }
-    for (const QJsonValue& entry : root[QStringLiteral("collections")].toArray()) {
-        const QJsonObject object = entry.toObject();
-        Collection collection{object[QStringLiteral("name")].toString(), {}};
-        for (const QJsonValue& item : object[QStringLiteral("zones")].toArray()) {
-            const QJsonObject zone_object = item.toObject();
-            Zone zone{zone_object[QStringLiteral("name")].toString(), {}};
-            for (const QJsonValue& key : zone_object[QStringLiteral("keys")].toArray()) {
-                zone.keys.push_back(ParseHex(key));
-            }
-            collection.zones.push_back(std::move(zone));
-        }
-        game->collections.push_back(std::move(collection));
-    }
-    for (const QJsonValue& entry : root[QStringLiteral("summary")].toArray()) {
-        const QJsonObject object = entry.toObject();
-        Summary summary{object[QStringLiteral("title")].toString(), {}};
-        for (const QJsonValue& item : object[QStringLiteral("terms")].toArray()) {
-            const QJsonObject term = item.toObject();
-            summary.terms.push_back({static_cast<u32>(ParseHex(term[QStringLiteral("hash")])),
-                                     term[QStringLiteral("collection")].toInt(-1),
-                                     term[QStringLiteral("constant")].toInteger(),
-                                     term[QStringLiteral("scale")].toInteger(1)});
-        }
-        game->summaries.push_back(std::move(summary));
-    }
-    return game;
-}
-
-std::optional<fs::path> NewestSave(const GameNotes& game) {
+/// The slot with the newest copy of the file, which may also sit directly in the title's folder.
+std::optional<fs::path> NewestSave(const std::string& folder, const std::string& name) {
     std::error_code ec;
-    const fs::path saves = Common::FS::GetEdenPath(Common::FS::EdenPath::NANDDir) / "user" / "save" /
-                           "0000000000000000";
     std::optional<fs::path> newest;
     fs::file_time_type newest_time{};
-    for (const auto& profile : fs::directory_iterator{saves, ec}) {
-        const fs::path title = profile.path() / game.folder;
+    const auto consider = [&](const fs::path& file) {
+        const auto time = fs::last_write_time(file, ec);
+        if (!ec && (!newest || time > newest_time)) {
+            newest = file;
+            newest_time = time;
+        }
+        ec.clear();
+    };
+    for (const auto& profile : fs::directory_iterator{SaveRoot(), ec}) {
+        const fs::path title = profile.path() / folder;
+        consider(title / name);
         for (const auto& slot : fs::directory_iterator{title, ec}) {
-            const fs::path file = slot.path() / game.save_file;
-            const auto time = fs::last_write_time(file, ec);
-            if (!ec && (!newest || time > newest_time)) {
-                newest = file;
-                newest_time = time;
-            }
-            ec.clear();
+            consider(slot.path() / name);
         }
     }
     return newest;
 }
 
-class SaveTable {
-public:
-    explicit SaveTable(const fs::path& path) {
-        std::ifstream file{path, std::ios::binary};
-        raw.assign(std::istreambuf_iterator<char>{file}, {});
-        if (raw.size() < 0x30) {
-            return;
-        }
-        const size_t end = Word(8);
-        for (size_t pos = 0x28; pos + 8 <= raw.size() && pos < end; pos += 8) {
-            table.try_emplace(Word(pos), Word(pos + 4));
-        }
-        for (size_t pos = end & ~size_t{7}; pos + 8 <= raw.size(); pos += 8) {
-            u64 key;
-            std::memcpy(&key, raw.data() + pos, sizeof(key));
-            keys.insert(key);
+/// What the game saves, to name the right file in a new module.
+QString SaveFiles(const std::string& folder) {
+    std::error_code ec;
+    QStringList names;
+    for (const auto& profile : fs::directory_iterator{SaveRoot(), ec}) {
+        for (const auto& entry :
+             fs::recursive_directory_iterator{profile.path() / folder, ec}) {
+            if (entry.is_regular_file(ec)) {
+                const QString name = QString::fromStdString(entry.path().filename().string());
+                if (!name.startsWith(QLatin1Char('.')) && !names.contains(name)) {
+                    names.push_back(name);
+                }
+            }
         }
     }
+    return names.join(QStringLiteral(", "));
+}
 
-    [[nodiscard]] int CountKeys(const std::vector<u64>& wanted) const {
-        return static_cast<int>(std::ranges::count_if(
-            wanted, [this](u64 key) { return keys.contains(key); }));
-    }
+QSettings PanelSettings() {
+    return {QString::fromStdString((NotesDir() / "panel.ini").string()), QSettings::IniFormat};
+}
 
-    [[nodiscard]] bool Valid() const {
-        return !table.empty();
-    }
+constexpr int RailWidth = 48;
+const QSize RailSize{300, 460};
+const QSize StripSize{700, 300};
+const QString DefaultAccent = QStringLiteral("#9fd36a");
 
-    [[nodiscard]] s64 Read(u32 hash, FieldKind kind) const {
-        const auto it = table.find(hash);
-        if (it == table.end()) {
-            return 0;
-        }
-        if (kind != FieldKind::Count) {
-            return it->second;
-        }
-        s64 value{};
-        if (size_t{it->second} + sizeof(value) <= raw.size()) {
-            std::memcpy(&value, raw.data() + it->second, sizeof(value));
-        }
-        return value;
-    }
+// A module that works as it is: it shows the save's size, and read() is the place to go on.
+constexpr const char* ModuleTemplate = R"(// Adventure notes module. Saving this file reloads the panel.
+var game = { title: "My game", folder: "%1", file: "progress.sav", accent: "#9fd36a" };
 
-private:
-    [[nodiscard]] u32 Word(size_t offset) const {
-        u32 value;
-        std::memcpy(&value, raw.data() + offset, sizeof(value));
-        return value;
-    }
-
-    std::vector<char> raw;
-    std::unordered_map<u32, u32> table;
-    std::unordered_set<u64> keys;
-};
+// save.data is the file as an ArrayBuffer. Read it with DataView or typed arrays.
+function read(save) {
+    return {
+        title: game.title,
+        keys: [{ title: "Save size", value: save.data.byteLength }],
+        tabs: [
+            { name: "Stats", views: [
+                { name: "Summary", rows: [
+                    { title: "Save size", value: save.data.byteLength },
+                ] },
+            ] },
+        ],
+    };
+}
+)";
 } // Anonymous namespace
 
-AdventureNotes::~AdventureNotes() = default;
+AdventureNotes::~AdventureNotes() {
+    SaveSettings();
+}
 
 AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id_)
     : QWidget(parent), program_id{program_id_} {
     setAttribute(Qt::WA_TranslucentBackground);
     setWindowFlags(Qt::FramelessWindowHint | Qt::Tool);
-    setStyleSheet(QStringLiteral(
-        "QLabel { color: #e9e6da; font-size: 12px; background: transparent; }"
-        "QLabel#header { color: #f4d27a; font-size: 19px; font-weight: 600; }"
-        "QLabel#subtitle { color: #8f9a86; font-size: 10px; letter-spacing: 1px; }"
-        "QLabel#value { color: #ffffff; font-weight: 600; }"
-        "QComboBox { color: #f1efe6; background: rgba(255,255,255,16); border: 1px solid "
-        "rgba(255,255,255,26); border-radius: 7px; padding: 4px 9px; font-size: 12px; }"
-        "QComboBox::drop-down { border: none; width: 16px; }"
-        "QComboBox QAbstractItemView { color: #f1efe6; background: #171b17; border: 1px solid "
-        "#3a4436; selection-background-color: #4c6a35; outline: none; }"
-        "QTabBar { background: transparent; }"
-        "QTabBar::tab { color: #9aa390; background: transparent; padding: 3px 8px; border: none; "
-        "font-size: 11px; }"
-        "QTabBar::tab:selected { color: #ffffff; border-bottom: 2px solid #9fd36a; }"
-        "QProgressBar { background: rgba(255,255,255,20); border: none; border-radius: 2px; "
-        "max-height: 4px; min-height: 4px; }"
-        "QProgressBar::chunk { background: #9fd36a; border-radius: 2px; }"
-        "QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; border: none; }"
-        "QScrollBar:vertical { background: transparent; width: 6px; margin: 0; }"
-        "QScrollBar::handle:vertical { background: rgba(255,255,255,50); border-radius: 3px; "
-        "min-height: 20px; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-        "QToolButton { color: #aeb5a4; background: transparent; border: none; font-size: 15px; "
-        "padding: 0 4px; }"
-        "QToolButton:hover { color: #ffffff; }"));
+
+    {
+        QSettings settings = PanelSettings();
+        strip = settings.value(QStringLiteral("strip"), false).toBool();
+        sizes[0] = settings.value(QStringLiteral("rail_size"), RailSize).toSize();
+        sizes[1] = settings.value(QStringLiteral("strip_size"), StripSize).toSize();
+    }
 
     subtitle = new QLabel(this);
     subtitle->setObjectName(QStringLiteral("subtitle"));
@@ -317,23 +168,54 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id_)
     header = new QLabel(this);
     header->setObjectName(QStringLiteral("header"));
     header->installEventFilter(this);
-    collapse = new QToolButton(this);
-    collapse->setText(QStringLiteral("–"));
     auto* titles = new QVBoxLayout;
     titles->setContentsMargins(0, 0, 0, 0);
     titles->setSpacing(0);
     titles->addWidget(subtitle);
     titles->addWidget(header);
-    auto* top = new QHBoxLayout;
+
+    tab_box = new QWidget(this);
+    tab_layout = new QBoxLayout(QBoxLayout::TopToBottom, tab_box);
+    tab_layout->setContentsMargins(0, 0, 0, 0);
+    tab_layout->setSpacing(5);
+
+    key_box = new QWidget(this);
+    key_layout = new QHBoxLayout(key_box);
+    key_layout->setContentsMargins(0, 0, 0, 0);
+    key_layout->setSpacing(16);
+
+    flip = new QToolButton(this);
+    flip->setText(QStringLiteral("⇄"));
+    flip->setToolTip(tr("Switch between the rail and the strip"));
+    connect(flip, &QToolButton::clicked, this, &AdventureNotes::SwitchLayout);
+    reload = new QToolButton(this);
+    reload->setText(QStringLiteral("↻"));
+    reload->setToolTip(tr("Read the module and the save again"));
+    connect(reload, &QToolButton::clicked, this, &AdventureNotes::LoadGame);
+    collapse = new QToolButton(this);
+    collapse->setText(QStringLiteral("–"));
+    connect(collapse, &QToolButton::clicked, this, &AdventureNotes::ToggleFold);
+    tools = new QWidget(this);
+    tools_layout = new QBoxLayout(QBoxLayout::TopToBottom, tools);
+    tools_layout->setContentsMargins(0, 0, 0, 0);
+    tools_layout->setSpacing(2);
+    tools_layout->addWidget(reload);
+    tools_layout->addWidget(flip);
+    tools_layout->addWidget(collapse);
+
+    rail = new QWidget(this);
+    rail->setFixedWidth(RailWidth);
+    rail_layout = new QVBoxLayout(rail);
+    rail_layout->setContentsMargins(7, 12, 7, 10);
+    rail_layout->setSpacing(6);
+    rail_layout->addStretch(1);
+
+    top = new QHBoxLayout;
     top->setContentsMargins(0, 0, 0, 0);
-    top->addLayout(titles, 1);
-    top->addWidget(collapse, 0, Qt::AlignTop);
+    top->setSpacing(16);
+    top->addLayout(titles);
 
-    tabs = new QTabBar(this);
-    tabs->setDrawBase(false);
-    tabs->setExpanding(false);
     views = new QComboBox(this);
-
     create = new QToolButton(this);
     create->setText(tr("Create a module for this game"));
     create->setToolButtonStyle(Qt::ToolButtonTextOnly);
@@ -341,76 +223,300 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id_)
 
     body = new QWidget;
     rows = new QGridLayout(body);
-    rows->setContentsMargins(2, 4, 8, 2);
-    rows->setHorizontalSpacing(12);
-    rows->setVerticalSpacing(5);
-    rows->setColumnStretch(0, 1);
     scroll = new QScrollArea(this);
     scroll->setWidget(body);
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setFrameShape(QFrame::NoFrame);
-
-    auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(14, 11, 10, 12);
-    layout->setSpacing(7);
-    layout->addLayout(top);
-    layout->addWidget(tabs);
-    layout->addWidget(views);
-    layout->addWidget(scroll, 1);
-    layout->addWidget(create);
     grip = new QLabel(QStringLiteral("⌟"), this);
     grip->setObjectName(QStringLiteral("subtitle"));
     grip->setCursor(Qt::SizeFDiagCursor);
     grip->installEventFilter(this);
-    layout->addWidget(grip, 0, Qt::AlignRight);
-    setMinimumWidth(230);
 
-    connect(tabs, &QTabBar::currentChanged, this, &AdventureNotes::FillViews);
+    content = new QWidget(this);
+    column = new QVBoxLayout(content);
+    column->setContentsMargins(14, 11, 12, 6);
+    column->setSpacing(7);
+    column->addLayout(top);
+    column->addWidget(views);
+    column->addWidget(scroll, 1);
+    column->addWidget(create);
+    column->addWidget(grip, 0, Qt::AlignRight);
+
+    auto* outer = new QHBoxLayout(this);
+    outer->setContentsMargins(0, 0, 0, 0);
+    outer->setSpacing(0);
+    outer->addWidget(rail);
+    outer->addWidget(content, 1);
+
     connect(views, &QComboBox::currentIndexChanged, this, &AdventureNotes::Refresh);
-    connect(collapse, &QToolButton::clicked, this, [this] {
-        const bool visible = !scroll->isVisible();
-        scroll->setVisible(visible);
-        tabs->setVisible(visible);
-        views->setVisible(visible && views->count() > 1);
-        grip->setVisible(visible);
-        collapse->setText(visible ? QStringLiteral("–") : QStringLiteral("+"));
-        sized_by_hand = false;
-        FitContent();
-    });
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &AdventureNotes::CheckFiles);
     timer->start(1000);
+    SetAccent(DefaultAccent);
+    ApplyLayout();
+    resize(sizes[strip ? 1 : 0]);
     LoadGame();
+}
+
+void AdventureNotes::SetAccent(const QString& color) {
+    accent = QColor::isValidColorName(color) ? color : DefaultAccent;
+    QString style = QStringLiteral(
+        "QLabel { color: #e8eaed; font-size: 13px; background: transparent; }"
+        "QLabel#header { color: ACCENT; font-size: 22px; font-weight: 700; }"
+        "QLabel#subtitle { color: #a7afb8; font-size: 10px; font-weight: 600; }"
+        "QLabel#value { color: #ffffff; font-weight: 600; }"
+        "QLabel#keyValue { color: #ffffff; font-size: 15px; font-weight: 700; }"
+        "QLabel#keyName { color: #a7afb8; font-size: 10px; }"
+        "QWidget#line { border-bottom: 1px solid #262b31; }"
+        "QComboBox { color: #e8eaed; background: #22272c; border: none; border-radius: 7px; "
+        "padding: 4px 9px; font-size: 12px; }"
+        "QComboBox::drop-down { border: none; width: 16px; }"
+        "QComboBox QAbstractItemView { color: #e8eaed; background: #1c2126; border: 1px solid "
+        "#2c3238; selection-background-color: #343b43; outline: none; }"
+        "QProgressBar { background: #2c3238; border: none; border-radius: 2px; "
+        "max-height: 4px; min-height: 4px; }"
+        "QProgressBar::chunk { background: ACCENT; border-radius: 2px; }"
+        "QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; border: none; }"
+        "QScrollBar:vertical { background: transparent; width: 6px; margin: 0; }"
+        "QScrollBar::handle:vertical { background: #3a4148; border-radius: 3px; "
+        "min-height: 20px; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+        "QToolButton { color: #a7afb8; background: transparent; border: none; font-size: 15px; "
+        "padding: 0 4px; }"
+        "QToolButton:hover { color: #ffffff; }"
+        "QToolButton#tab { color: #c9ced4; font-size: 12px; font-weight: 600; "
+        "border-radius: 8px; padding: 0 10px; }"
+        "QToolButton#tab:checked { color: #15181c; background: ACCENT; }");
+    setStyleSheet(style.replace(QStringLiteral("ACCENT"), accent));
+}
+
+void AdventureNotes::SaveSettings() {
+    if (!collapsed) {
+        sizes[strip ? 1 : 0] = size();
+    }
+    QSettings settings = PanelSettings();
+    settings.setValue(QStringLiteral("strip"), strip);
+    settings.setValue(QStringLiteral("rail_size"), sizes[0]);
+    settings.setValue(QStringLiteral("strip_size"), sizes[1]);
+}
+
+void AdventureNotes::ApplyLayout() {
+    // The same widgets, placed again: a layout only decides where the tabs and tools sit.
+    rail_layout->removeWidget(tab_box);
+    rail_layout->removeWidget(tools);
+    column->removeWidget(tab_box);
+    top->removeWidget(key_box);
+    top->removeWidget(tools);
+    if (strip) {
+        tab_layout->setDirection(QBoxLayout::LeftToRight);
+        tools_layout->setDirection(QBoxLayout::LeftToRight);
+        // A row of its own: games can have many tabs, and their names must fit.
+        column->insertWidget(1, tab_box);
+        top->addWidget(key_box, 1, Qt::AlignRight | Qt::AlignVCenter);
+        top->addWidget(tools, 0, Qt::AlignTop);
+    } else {
+        tab_layout->setDirection(QBoxLayout::TopToBottom);
+        tools_layout->setDirection(QBoxLayout::TopToBottom);
+        rail_layout->insertWidget(0, tab_box);
+        rail_layout->addWidget(tools, 0, Qt::AlignHCenter);
+    }
+    rail->setVisible(!strip);
+    setMinimumWidth(strip ? 460 : 230);
+    BuildTabs();
+    BuildKeys();
+}
+
+void AdventureNotes::SwitchLayout() {
+    if (collapsed) {
+        ToggleFold();
+    }
+    sizes[strip ? 1 : 0] = size();
+    strip = !strip;
+    ApplyLayout();
+    resize(sizes[strip ? 1 : 0]);
+    Refresh();
+    update();
+    SaveSettings();
+}
+
+void AdventureNotes::ToggleFold() {
+    collapsed = !collapsed;
+    collapse->setText(collapsed ? QStringLiteral("+") : QStringLiteral("–"));
+    if (collapsed) {
+        open_size = size();
+    }
+    const bool visible = !collapsed;
+    views->setVisible(visible && views->count() > 1);
+    scroll->setVisible(visible);
+    grip->setVisible(visible);
+    create->setVisible(visible && !script && create->isEnabled());
+    if (strip) {
+        tab_box->setVisible(visible);
+        if (collapsed) {
+            // What is left once the rest is hidden: the title and the key numbers.
+            column->invalidate();
+            column->activate();
+            layout()->invalidate();
+            layout()->activate();
+            resize(width(), layout()->sizeHint().height());
+        }
+    } else {
+        // Folded, only the rail stays.
+        content->setVisible(visible);
+        setMinimumWidth(collapsed ? RailWidth : 230);
+        if (collapsed) {
+            resize(RailWidth, height());
+        }
+    }
+    if (!collapsed) {
+        resize(open_size);
+    }
+    update();
+}
+
+void AdventureNotes::BuildTabs() {
+    while (QLayoutItem* item = tab_layout->takeAt(0)) {
+        delete item->widget();
+        delete item;
+    }
+    for (int index = 0; index < static_cast<int>(report.tabs.size()); ++index) {
+        const QString& name = report.tabs[static_cast<size_t>(index)].name;
+        auto* button = new QToolButton(tab_box);
+        button->setObjectName(QStringLiteral("tab"));
+        button->setCheckable(true);
+        button->setToolTip(name);
+        button->setText(strip ? name : name.left(1));
+        if (strip) {
+            button->setFixedHeight(28);
+            button->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+        } else {
+            button->setFixedSize(34, 34);
+        }
+        connect(button, &QToolButton::clicked, this, [this, index] { SelectTab(index); });
+        tab_layout->addWidget(button);
+    }
+    if (strip) {
+        tab_layout->addStretch(1);
+        tab_layout->activate();
+        setMinimumWidth(std::max(460, tab_layout->sizeHint().width() + 26));
+    }
+    MarkTabs();
+}
+
+void AdventureNotes::MarkTabs() {
+    for (int index = 0; index < tab_layout->count(); ++index) {
+        if (auto* button = qobject_cast<QToolButton*>(tab_layout->itemAt(index)->widget())) {
+            button->setChecked(index == current_tab);
+        }
+    }
+}
+
+void AdventureNotes::BuildKeys() {
+    while (QLayoutItem* item = key_layout->takeAt(0)) {
+        delete item->widget();
+        delete item;
+    }
+    for (const NotesRow& key : report.keys) {
+        auto* box = new QWidget(key_box);
+        auto* lines = new QVBoxLayout(box);
+        lines->setContentsMargins(0, 0, 0, 0);
+        lines->setSpacing(0);
+        auto* value = new QLabel(key.value, box);
+        value->setObjectName(QStringLiteral("keyValue"));
+        value->setAlignment(Qt::AlignRight);
+        auto* name = new QLabel(key.title, box);
+        name->setObjectName(QStringLiteral("keyName"));
+        name->setAlignment(Qt::AlignRight);
+        lines->addWidget(value);
+        lines->addWidget(name);
+        key_layout->addWidget(box);
+    }
+    key_box->setVisible(strip && !report.keys.empty());
+}
+
+void AdventureNotes::SelectTab(int index) {
+    if (collapsed) {
+        ToggleFold();
+    }
+    current_tab = index;
+    tab_name = report.tabs[static_cast<size_t>(index)].name;
+    MarkTabs();
+    FillViews();
 }
 
 void AdventureNotes::LoadGame() {
     const fs::path path = FindModule(program_id);
     std::error_code ec;
     module_time = fs::last_write_time(path, ec);
+    save_time = {};
+    report = {};
+    ClearTabs();
+    create->setEnabled(!fs::exists(path, ec));
+    create->setVisible(create->isEnabled() && !collapsed);
+    script = std::make_unique<NotesScript>();
     QString error;
-    game = LoadModule(path, error);
-    const QSignalBlocker blocker{tabs};
-    while (tabs->count() > 0) {
-        tabs->removeTab(0);
-    }
-    create->setVisible(!game && !fs::exists(path, ec));
-    if (!game) {
+    if (!script->Load(QString::fromStdString(path.string()), LibraryDirs(), error)) {
+        script.reset();
+        SetAccent(DefaultAccent);
         ShowMessage(error.isEmpty() ? tr("No module for this game yet") : error);
-        tabs->setVisible(false);
-        views->setVisible(false);
         return;
     }
-    tabs->setVisible(true);
-    tabs->addTab(QStringLiteral("Global"));
-    QStringList names;
-    for (const View& view : game->views) {
-        if (!view.tab.isEmpty() && !names.contains(view.tab)) {
-            names.push_back(view.tab);
-            tabs->addTab(view.tab);
+    SetAccent(script->Accent());
+    ReadSave();
+}
+
+void AdventureNotes::ReadSave() {
+    const std::string folder = script->Folder().toStdString();
+    const auto path = NewestSave(folder, script->File().toStdString());
+    if (!path) {
+        report = {};
+        ClearTabs();
+        const QString files = SaveFiles(folder);
+        ShowMessage(files.isEmpty()
+                        ? tr("No save found in %1").arg(script->Folder())
+                        : tr("No %1 in this game's save. It holds: %2").arg(script->File(), files));
+        return;
+    }
+    std::error_code ec;
+    save_time = fs::last_write_time(*path, ec);
+    QString error;
+    auto result = script->Read(QString::fromStdString(path->string()), error);
+    if (!result) {
+        report = {};
+        ClearTabs();
+        ShowMessage(error);
+        return;
+    }
+    // A new save, or a reload, keeps the page in view.
+    const QString tab = tab_name;
+    const QString view = view_name;
+    report = std::move(*result);
+    slot = QString::fromStdString(path->parent_path().filename().string());
+    current_tab = 0;
+    for (size_t index = 0; index < report.tabs.size(); ++index) {
+        if (report.tabs[index].name == tab) {
+            current_tab = static_cast<int>(index);
         }
     }
+    BuildTabs();
+    BuildKeys();
     FillViews();
+    if (const int index = views->findText(view); index > 0) {
+        views->setCurrentIndex(index);
+    }
+    if (static_cast<size_t>(current_tab) < report.tabs.size()) {
+        tab_name = report.tabs[static_cast<size_t>(current_tab)].name;
+    }
+}
+
+void AdventureNotes::ClearTabs() {
+    current_tab = 0;
+    BuildTabs();
+    BuildKeys();
+    const QSignalBlocker blocker{views};
+    views->clear();
+    views->setVisible(false);
 }
 
 void AdventureNotes::CheckFiles() {
@@ -421,46 +527,49 @@ void AdventureNotes::CheckFiles() {
         LoadGame();
         return;
     }
-    if (!game) {
+    if (!script) {
         return;
     }
-    if (const auto path = NewestSave(*game)) {
+    const auto path = NewestSave(script->Folder().toStdString(), script->File().toStdString());
+    if (path) {
         const auto saved = fs::last_write_time(*path, ec);
         if (!ec && saved != save_time) {
-            save_time = saved;
-            Refresh();
+            ReadSave();
         }
     }
 }
 
+void AdventureNotes::ClearRows() {
+    // A QGridLayout keeps its rows once they exist, and with them the height of the longest view.
+    while (QLayoutItem* item = rows->takeAt(0)) {
+        delete item->widget();
+        delete item;
+    }
+    delete rows;
+    rows = new QGridLayout(body);
+    rows->setContentsMargins(0, 2, 8, 2);
+    rows->setHorizontalSpacing(26);
+    rows->setVerticalSpacing(0);
+}
+
 void AdventureNotes::ShowMessage(const QString& text) {
+    ClearRows();
     subtitle->setText(QStringLiteral("ADVENTURE NOTES"));
     header->setText(QString{});
     auto* label = new QLabel(text, body);
     label->setWordWrap(true);
-    rows->addWidget(label, 0, 0, 1, 2);
-    FitContent();
+    rows->addWidget(label, 0, 0);
+    rows->setRowStretch(1, 1);
 }
 
 void AdventureNotes::CreateModule() {
-    // A commented example the user fills in: the title and a first stat are all it takes.
     const fs::path path = UserModule(program_id);
     std::error_code ec;
     fs::create_directories(path.parent_path(), ec);
     std::ofstream file{path};
-    file << fmt::format(R"({{
- "title": "My game",
- "save": {{ "folder": "{:016X}", "file": "progress.sav", "layout": "gamedata-table" }},
- "play_time": "0x00000000",
- "views": [
-  {{ "name": "Summary", "tab": "Stats", "fields": [
-   {{ "title": "Example", "hash": "0x00000000", "kind": "count" }}
-  ] }}
- ],
- "collections": []
-}}
-)",
-                        program_id);
+    file << QString::fromLatin1(ModuleTemplate)
+                .arg(QString::fromStdString(fmt::format("{:016X}", program_id)))
+                .toStdString();
     file.close();
     QDesktopServices::openUrl(
         QUrl::fromLocalFile(QString::fromStdString(path.parent_path().string())));
@@ -470,167 +579,108 @@ void AdventureNotes::CreateModule() {
 void AdventureNotes::FillViews() {
     const QSignalBlocker blocker{views};
     views->clear();
-    if (game && tabs->currentIndex() > 0) {
-        const QString tab = tabs->tabText(tabs->currentIndex());
-        for (size_t index = 0; index < game->views.size(); ++index) {
-            if (game->views[index].tab == tab) {
-                views->addItem(game->views[index].name, static_cast<int>(index));
-            }
+    if (static_cast<size_t>(current_tab) < report.tabs.size()) {
+        for (const NotesView& view : report.tabs[static_cast<size_t>(current_tab)].views) {
+            views->addItem(view.name);
         }
     }
-    views->setVisible(views->count() > 1);
+    views->setVisible(!collapsed && views->count() > 1);
     Refresh();
 }
 
-void AdventureNotes::FitContent() {
-    if (sized_by_hand) {
-        return;
+QWidget* AdventureNotes::MakeRow(const NotesRow& line, std::vector<QLabel*>& values) {
+    auto* row = new QWidget(body);
+    row->setObjectName(QStringLiteral("line"));
+    row->setAttribute(Qt::WA_StyledBackground);
+    row->setMinimumHeight(30);
+    auto* lines = new QVBoxLayout(row);
+    lines->setContentsMargins(0, 5, 0, 5);
+    lines->setSpacing(4);
+    auto* text_row = new QHBoxLayout;
+    text_row->setContentsMargins(0, 0, 0, 0);
+    text_row->setSpacing(10);
+    lines->addLayout(text_row);
+
+    auto* name = new QLabel(line.title, row);
+    name->setWordWrap(true);
+    text_row->addWidget(name, 1);
+
+    QString shown = line.value;
+    if (line.done >= 0) {
+        shown = QStringLiteral("%1 / %2").arg(line.done).arg(line.total);
+        auto* bar = new QProgressBar(row);
+        bar->setRange(0, std::max(line.total, 1));
+        bar->setValue(line.done);
+        bar->setTextVisible(false);
+        // A narrow list has no room for it beside the name.
+        if (strip) {
+            bar->setFixedWidth(54);
+            text_row->addWidget(bar);
+        } else {
+            lines->addWidget(bar);
+        }
+    } else if (line.check >= 0) {
+        shown = line.check != 0
+                    ? QStringLiteral("<span style='color:%1'>✓</span>").arg(accent)
+                    : QStringLiteral("<span style='color:#a7afb8'>—</span>");
     }
-    // As tall as what it shows, up to a limit: a short view stays small.
-    constexpr int MaxListHeight = 330;
-    rows->activate();
-    const int wanted = std::min(rows->sizeHint().height(), MaxListHeight);
-    scroll->setMinimumHeight(wanted);
-    scroll->setMaximumHeight(wanted);
-    layout()->activate();
-    resize(width(), layout()->sizeHint().height());
+    auto* value = new QLabel(shown, row);
+    value->setObjectName(QStringLiteral("value"));
+    value->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    text_row->addWidget(value);
+    values.push_back(value);
+    return row;
 }
 
 void AdventureNotes::Refresh() {
-    SCOPE_EXIT {
-        FitContent();
-    };
-    // A QGridLayout keeps its rows once they exist, and with them the height of the longest view.
-    while (QLayoutItem* item = rows->takeAt(0)) {
-        delete item->widget();
-        delete item;
-    }
-    delete rows;
-    rows = new QGridLayout(body);
-    rows->setContentsMargins(2, 4, 8, 2);
-    rows->setHorizontalSpacing(12);
-    rows->setVerticalSpacing(5);
-    rows->setColumnStretch(0, 1);
-    if (!game) {
+    const int view = views->currentIndex();
+    if (view < 0 || !script || static_cast<size_t>(current_tab) >= report.tabs.size()) {
         return;
     }
-    const auto path = NewestSave(*game);
-    if (!path) {
-        ShowMessage(tr("No save found"));
-        return;
+    view_name = views->currentText();
+    ClearRows();
+    subtitle->setText(
+        QStringLiteral("%1  ·  %2").arg(script->Title().toUpper().left(26)).arg(slot));
+    header->setText(report.title);
+    const int columns = strip ? 2 : 1;
+    int count = 0;
+    std::vector<QLabel*> values;
+    for (const NotesRow& line : report.tabs[static_cast<size_t>(current_tab)]
+                                    .views[static_cast<size_t>(view)]
+                                    .rows) {
+        rows->addWidget(MakeRow(line, values), count / columns, count % columns, Qt::AlignTop);
+        ++count;
     }
-    const SaveTable save{*path};
-    if (!save.Valid()) {
-        ShowMessage(tr("Unreadable save"));
-        return;
+    // One width for every value of the view: numbers and bars line up in columns.
+    int widest = 0;
+    for (QLabel* value : values) {
+        value->ensurePolished();
+        widest = std::max(widest, value->sizeHint().width());
     }
-    const s64 seconds = save.Read(game->play_time_hash, FieldKind::Count);
-    subtitle->setText(QStringLiteral("%1  ·  %2")
-                          .arg(game->title.toUpper().left(26))
-                          .arg(QString::fromStdString(path->parent_path().filename().string())));
-    header->setText(QStringLiteral("%1 h %2")
-                        .arg(seconds / 3600)
-                        .arg((seconds % 3600) / 60, 2, 10, QLatin1Char('0')));
-    int row = 0;
-    const auto add = [this, &row](const QString& title, const QString& value) {
-        auto* name = new QLabel(title, body);
-        name->setWordWrap(true);
-        auto* text = new QLabel(value, body);
-        text->setObjectName(QStringLiteral("value"));
-        text->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        rows->addWidget(name, row, 0);
-        rows->addWidget(text, row, 1);
-        ++row;
-    };
-    const auto progress = [this, &row, &add](const QString& title, int done, int total) {
-        add(title, QStringLiteral("%1 / %2").arg(done).arg(total));
-        auto* bar = new QProgressBar(body);
-        bar->setRange(0, std::max(total, 1));
-        bar->setValue(done);
-        bar->setTextVisible(false);
-        rows->addWidget(bar, row, 0, 1, 2);
-        ++row;
-    };
-    const int selected = views->count() > 0 ? views->currentData().toInt() : -1;
-    if (selected < 0) {
-        // Global: what each checklist holds, to see where something is missing.
-        for (const View& view : game->views) {
-            if (!view.checklist) {
-                continue;
-            }
-            int done = 0, total = 0;
-            for (const Field& field : view.fields) {
-                if (field.kind == FieldKind::Flag) {
-                    ++total;
-                    done += save.Read(field.hash, field.kind) != 0 ? 1 : 0;
-                }
-            }
-            progress(view.name, done, total);
-        }
-        for (const Collection& collection : game->collections) {
-            int found = 0, total = 0;
-            for (const Zone& zone : collection.zones) {
-                found += save.CountKeys(zone.keys);
-                total += static_cast<int>(zone.keys.size());
-            }
-            progress(collection.name, found, total);
-        }
-        for (const Summary& summary : game->summaries) {
-            s64 value = 0;
-            for (const Term& term : summary.terms) {
-                s64 part = term.constant;
-                if (term.hash != 0) {
-                    part = save.Read(term.hash, FieldKind::Number);
-                } else if (term.collection >= 0) {
-                    part = 0;
-                    for (const Zone& zone :
-                         game->collections[static_cast<size_t>(term.collection)].zones) {
-                        part += save.CountKeys(zone.keys);
-                    }
-                }
-                value += part * (term.hash != 0 || term.collection >= 0 ? term.scale : 1);
-            }
-            add(summary.title, QString::number(value));
-        }
-        return;
+    for (QLabel* value : values) {
+        value->setFixedWidth(widest);
     }
-    const View& view = game->views[static_cast<size_t>(selected)];
-    if (view.collection >= 0) {
-        for (const Zone& zone : game->collections[static_cast<size_t>(view.collection)].zones) {
-            const int found = save.CountKeys(zone.keys);
-            const int total = static_cast<int>(zone.keys.size());
-            progress(zone.name, found, total);
-        }
-        return;
+    for (int column = 0; column < columns; ++column) {
+        rows->setColumnStretch(column, 1);
     }
-    for (const Field& field : view.fields) {
-        const s64 value = save.Read(field.hash, field.kind);
-        const QString shown =
-            field.kind == FieldKind::Flag
-                ? (value != 0 ? QStringLiteral("<span style='color:#9fd36a'>✓</span>")
-                              : QStringLiteral("<span style='color:#6d7566'>—</span>"))
-                : QString::number(value);
-        add(field.title, shown);
-    }
-    for (const Collection& collection : game->collections) {
-        for (const Zone& zone : collection.zones) {
-            if (zone.name == view.name) {
-                progress(collection.name, save.CountKeys(zone.keys),
-                         static_cast<int>(zone.keys.size()));
-            }
-        }
-    }
+    // The spare height goes below the list: lines keep their spacing whatever the window's size.
+    rows->setRowStretch((count + columns - 1) / columns, 1);
 }
 
 void AdventureNotes::paintEvent(QPaintEvent*) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
-    QLinearGradient gradient{0, 0, 0, static_cast<qreal>(height())};
-    gradient.setColorAt(0.0, QColor{30, 36, 28, 228});
-    gradient.setColorAt(1.0, QColor{14, 17, 14, 228});
-    painter.setBrush(gradient);
-    painter.setPen(QPen{QColor{255, 255, 255, 26}, 1.0});
-    painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 12.0, 12.0);
+    QPainterPath outline;
+    outline.addRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 12.0, 12.0);
+    painter.fillPath(outline, QColor{21, 24, 28, 238});
+    if (!strip) {
+        painter.save();
+        painter.setClipPath(outline);
+        painter.fillRect(QRect{0, 0, RailWidth, height()}, QColor{15, 18, 21, 245});
+        painter.restore();
+    }
+    painter.setPen(QPen{QColor{44, 50, 56}, 1.0});
+    painter.drawPath(outline);
 }
 
 void AdventureNotes::StartDrag(QPoint position) {
@@ -656,10 +706,6 @@ void AdventureNotes::mouseMoveEvent(QMouseEvent* event) {
 
 bool AdventureNotes::eventFilter(QObject* object, QEvent* event) {
     if (object == grip && event->type() == QEvent::MouseButtonPress) {
-        // By hand from now on: the list takes what the window gives it.
-        sized_by_hand = true;
-        scroll->setMinimumHeight(0);
-        scroll->setMaximumHeight(QWIDGETSIZE_MAX);
         if (windowHandle()) {
             windowHandle()->startSystemResize(Qt::RightEdge | Qt::BottomEdge);
         }
