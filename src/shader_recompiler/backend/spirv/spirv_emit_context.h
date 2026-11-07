@@ -7,7 +7,6 @@
 #pragma once
 
 #include <array>
-#include <optional>
 
 #include <sirit/sirit.h>
 #include "common/container/unordered_set.h"
@@ -161,14 +160,6 @@ struct GenericElementInfo {
     Id id{};
     u32 first_element{};
     u32 num_components{};
-};
-
-struct CooperativeHmmaTypes {
-    Id float16{};
-    Id float16x2{};
-    Id matrix_a{};
-    Id matrix_b{};
-    Id matrix_c{};
 };
 
 class EmitContext final : public Sirit::Module {
@@ -379,7 +370,6 @@ public:
     Id frag_depth{};
 
     std::array<Id, 2> software_matrix_functions{};
-    std::optional<CooperativeHmmaTypes> cooperative_hmma; ///< Set when a program lowers HMMA to it
     std::vector<Id> interfaces;
     std::vector<std::pair<u32, spv::Op>> opcode_rewrites;
 
