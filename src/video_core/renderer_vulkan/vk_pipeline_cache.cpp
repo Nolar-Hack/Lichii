@@ -1612,9 +1612,19 @@ void PipelineCache::StartGraphicsWarm(u64 title_id) {
                     Shader::Environment* const env_ptr = &env;
                     ok = WarmGraphicsLibraries(pools, key, std::span{&env_ptr, 1});
                 } catch (const std::exception& e) {
-                    LOG_DEBUG(Render_Vulkan, "graphics_warm: {}", e.what());
+                    static std::atomic<u32> reported{};
+                    if (reported.fetch_add(1) < 60) {
+                        LOG_INFO(Render_Vulkan, "graphics_warm: {}", e.what());
+                    }
                 }
                 (ok ? reader->built : reader->failed_builds).fetch_add(1);
+                if (!ok) {
+                    static std::atomic<u32> reported{};
+                    if (reported.fetch_add(1) < 60) {
+                        LOG_INFO(Render_Vulkan, "graphics_warm: not built, stages {:016x} {:016x}",
+                                 key.unique_hashes[1], key.unique_hashes[5]);
+                    }
+                }
                 const size_t done = reader->built + reader->failed_builds;
                 if (reader->throttle.Due()) {
                     // The builder's recorded count, or else an estimate from the bytes read.
@@ -2447,7 +2457,10 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline(
                 continue;
             }
             const Shader::IR::Program& program{programs[index]};
-            if (program.stage == Shader::Stage::Task || program.stage == Shader::Stage::Mesh) {
+            // EDEN_NX2_GPL_MESH=1 links task and mesh pipelines from libraries too.
+            static const bool mesh_libraries = std::getenv("EDEN_NX2_GPL_MESH") != nullptr;
+            if (!mesh_libraries &&
+                (program.stage == Shader::Stage::Task || program.stage == Shader::Stage::Mesh)) {
                 return false;
             }
             const bool fragment = index + 1 == Maxwell::MaxShaderProgram;
