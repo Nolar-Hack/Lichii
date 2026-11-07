@@ -3046,7 +3046,7 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline(
                     stage_modules[stage] = EmitShaderModule(
                         device, profile, *job->runtime_infos[stage], job->programs[stage + 1],
                         stage_binding, hashes[stage + 1], stage, job->reference_spirv[stage],
-                        use_libraries ? &stage_hashes[stage] : nullptr);
+                        nullptr, use_libraries ? &stage_hashes[stage] : nullptr);
                 }
             }
             auto completed_pools = std::move(job->pools);
@@ -3202,8 +3202,7 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateFromTranslation(
     return std::make_unique<GraphicsPipeline>(
         scheduler, buffer_cache, texture_cache, vulkan_pipeline_cache, &shader_notify, device,
         descriptor_pool, guest_descriptor_queue, descriptor_buffer_ring, &workers, nullptr,
-        render_pass_cache, key, std::move(modules), infos,
-        std::function<std::array<vk::ShaderModule, Maxwell::MaxShaderStage>()>{});
+        render_pass_cache, key, std::move(modules), infos, GraphicsPipeline::EmitStagesFunc{});
 }
 
 std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline() {
