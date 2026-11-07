@@ -165,6 +165,9 @@ struct Job {
     size_t graphics_index{};
     std::vector<u8> program;
     std::vector<u8> program_control;
+    bool mesh{};
+    std::vector<u8> task_program; ///< Empty for a mesh program with no task program.
+    std::vector<u8> task_control;
     ComputeControl control{};
 };
 
@@ -173,6 +176,7 @@ struct JobResult {
     std::vector<u8> bytes; ///< Compute: full entry. Graphics: env record.
     ComputeKey compute_key{};
     u64 hash{};
+    u64 task_hash{}; ///< Mesh entries: 0 without a task program.
 };
 
 class Converter {
@@ -256,6 +260,29 @@ private:
     static JobResult Convert(const Job& job) {
         JobResult result;
         try {
+            if (job.mesh) {
+                constexpr u32 TaskStage = 7, MeshStage = 8;
+                const auto registers = MeshRegisters(job.program_control, job.task_control);
+                if (!job.task_program.empty()) {
+                    LoweredCode task;
+                    if (LowerProgram(job.task_program, true, task)) {
+                        return result;
+                    }
+                    result.task_hash = StageHash(task.code);
+                    result.bytes = GraphicsEnv(TaskStage, task, job.task_program, job.task_control,
+                                               &registers);
+                }
+                LoweredCode mesh;
+                if (LowerProgram(job.program, true, mesh)) {
+                    return result;
+                }
+                result.hash = StageHash(mesh.code);
+                const auto env =
+                    GraphicsEnv(MeshStage, mesh, job.program, job.program_control, &registers);
+                result.bytes.insert(result.bytes.end(), env.begin(), env.end());
+                result.ok = true;
+                return result;
+            }
             LoweredCode lowered;
             if (const auto error = LowerProgram(job.program, job.graphics, lowered)) {
                 LOG_DEBUG(Render_Vulkan, "Shader warm-up: program not converted: {}", *error);
@@ -473,11 +500,25 @@ Result BuildWarmFilesWith(Core::System& system, const fs::path& game_path, u64 t
 
     // Consumes finished conversions in submission order (first program wins on equal keys).
     std::vector<std::pair<bool, size_t>> job_kinds; // graphics?, graphics program index
+    constexpr size_t MeshEntry = ~size_t{0};
+    size_t mesh_entries = 0;
+    std::vector<u8> pending_task, pending_task_control;
+    std::set<std::pair<u64, u64>> mesh_identities;
     size_t consumed = 0;
     const auto consume = [&](JobResult&& r) {
         const auto [is_graphics, index] = job_kinds[consumed++];
         if (!r.ok) {
             ++result.skipped;
+            return;
+        }
+        if (index == MeshEntry) {
+            const auto key = MeshEntryKey(vertex_template, r.task_hash, r.hash);
+            Write(graphics_out, u32{r.task_hash != 0 ? 2U : 1U});
+            graphics_out.write(reinterpret_cast<const char*>(r.bytes.data()),
+                               static_cast<std::streamsize>(r.bytes.size()));
+            graphics_out.write(reinterpret_cast<const char*>(key.data()),
+                               static_cast<std::streamsize>(key.size()));
+            ++mesh_entries;
             return;
         }
         if (!is_graphics) {
@@ -535,7 +576,34 @@ Result BuildWarmFilesWith(Core::System& system, const fs::path& game_path, u64 t
         const auto& archive = archives[archive_index];
         const auto data = archive.file->ReadAllBytes();
         const auto name = archive.path.substr(archive.path.rfind('/') + 1);
+        pending_task.clear();
         const auto on_record = [&](const ShaderRecord& record) {
+            if (record.stage == ProgramStage::Task) {
+                pending_task.assign(record.code.begin(), record.code.end());
+                pending_task_control.assign(record.control.begin(), record.control.end());
+                return;
+            }
+            if (record.stage == ProgramStage::Mesh) {
+                const auto hash_of = [](std::span<const u8> bytes) {
+                    return Common::CityHash64(reinterpret_cast<const char*>(bytes.data()),
+                                              bytes.size());
+                };
+                const std::pair identity{hash_of(pending_task), hash_of(record.code)};
+                if (mesh_identities.insert(identity).second) {
+                    Job job;
+                    job.graphics = true;
+                    job.mesh = true;
+                    job.seq = seq++;
+                    job.program.assign(record.code.begin(), record.code.end());
+                    job.program_control.assign(record.control.begin(), record.control.end());
+                    job.task_program = pending_task;
+                    job.task_control = pending_task_control;
+                    job_kinds.emplace_back(true, MeshEntry);
+                    converter->Push(std::move(job));
+                }
+                pending_task.clear();
+                return;
+            }
             const bool is_graphics =
                 record.stage == ProgramStage::Vertex || record.stage == ProgramStage::Fragment;
             if (record.stage != ProgramStage::Compute && !is_graphics) {

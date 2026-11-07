@@ -62,7 +62,16 @@ std::vector<u8> ComputeEntry(const LoweredCode& lowered, const ComputeControl& c
 /// Env record of a single-stage graphics entry (stage 0 vertex or 4 fragment), without the
 /// leading env count and the key. `program` is the extracted allocation (header + code).
 std::vector<u8> GraphicsEnv(u32 stage, const LoweredCode& lowered, std::span<const u8> program,
-                            std::span<const u8> control = {});
+                            std::span<const u8> control = {},
+                            const std::array<u32, 3>* mesh_registers = nullptr);
+
+/// SET_MESH_SHADER_A, SET_MESH_SHADER_B and SET_MESH_INIT_SHADER rebuilt from the program's
+/// control blocks. `task_control` is empty for a mesh program with no task program.
+std::array<u32, 3> MeshRegisters(std::span<const u8> mesh_control, std::span<const u8> task_control);
+
+/// The key of a task + mesh entry: task in the vertex slot and mesh in the tessellation one, or
+/// mesh alone in the vertex slot.
+GraphicsKey MeshEntryKey(const GraphicsKey& template_key, u64 task_hash, u64 mesh_hash);
 
 /// The key of a graphics entry: `template_key` with this stage's hash slot (vertex 1,
 /// fragment 5) and, for vertex, the attribute types.
