@@ -263,6 +263,11 @@ public:
 
     /// Graphics pipeline libraries (EDEN_NX2_GPL): one set per stage, set index = stage index,
     /// null where the stage has no descriptors or is not part of the library.
+    /// The push constant range of a layout with no task or mesh stage of its own in a mesh pipeline.
+    void SetUsesMesh() noexcept {
+        uses_mesh = true;
+    }
+
     vk::PipelineLayout CreateIndependentPipelineLayout(
         std::span<const VkDescriptorSetLayout> set_layouts, bool independent_sets) const {
         const VkPushConstantRange range{PushConstantRange()};
