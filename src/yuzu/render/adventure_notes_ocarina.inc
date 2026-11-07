@@ -305,7 +305,7 @@ constexpr std::array<Collection, 4> OcarinaCollections{{
     {"Rubis d'argent", OcarinaSilver},
 }};
 
-constexpr std::array<View, 23> OcarinaViews{{
+constexpr std::array<View, 24> OcarinaViews{{
     {"Stats · Résumé", StatsSummary, false},
     {"Stats · Combat", StatsCombat, false},
     {"Stats · Exploration", StatsExploration, false},
