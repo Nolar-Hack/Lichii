@@ -2015,8 +2015,11 @@ GplLibrary GraphicsPipeline::MakeShaderLibrary(GplPart part, const PipelineState
             .pSpecializationInfo = nullptr,
         });
     }
-    library.layout =
-        DescriptorLayoutBuilder{device}.CreateIndependentPipelineLayout(set_layouts, true);
+    DescriptorLayoutBuilder layout_builder{device};
+    if (IsMeshPipeline()) {
+        layout_builder.SetUsesMesh();
+    }
+    library.layout = layout_builder.CreateIndependentPipelineLayout(set_layouts, true);
     const bool pre_rasterization = part == GplPart::PreRasterization;
     const VkGraphicsPipelineLibraryCreateInfoEXT library_ci{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
@@ -2053,12 +2056,14 @@ GplLibrary GraphicsPipeline::MakeShaderLibrary(GplPart part, const PipelineState
 /// Links the vertex input, both shader libraries and the fragment output library into a pipeline,
 /// with link time optimization when `optimized` is set.
 vk::Pipeline GraphicsPipeline::LinkLibraries(VkRenderPass render_pass, bool optimized) {
-    const std::array<VkPipeline, 4> libraries{
-        *vertex_input_library,
-        *shader_libraries[0]->pipeline,
-        *shader_libraries[1]->pipeline,
-        *fragment_output_library,
-    };
+    // A mesh pipeline has no vertex input.
+    boost::container::static_vector<VkPipeline, 4> libraries;
+    if (!IsMeshPipeline()) {
+        libraries.push_back(*vertex_input_library);
+    }
+    libraries.push_back(*shader_libraries[0]->pipeline);
+    libraries.push_back(*shader_libraries[1]->pipeline);
+    libraries.push_back(*fragment_output_library);
     const VkPipelineLibraryCreateInfoKHR link_ci{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR,
         .pNext = nullptr,
@@ -2134,7 +2139,8 @@ bool GraphicsPipeline::MakeLibraryPipeline(VkRenderPass render_pass) {
         .pNext = nullptr,
         .flags = VK_GRAPHICS_PIPELINE_LIBRARY_VERTEX_INPUT_INTERFACE_BIT_EXT,
     };
-    vertex_input_library = device.GetLogical().CreateGraphicsPipeline({
+    if (!IsMeshPipeline()) {
+        vertex_input_library = device.GetLogical().CreateGraphicsPipeline({
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .pNext = &vertex_input_ci,
         .flags = LibraryFlags(device),
@@ -2154,7 +2160,8 @@ bool GraphicsPipeline::MakeLibraryPipeline(VkRenderPass render_pass) {
         .subpass = 0,
         .basePipelineHandle = nullptr,
         .basePipelineIndex = 0,
-    }, *pipeline_cache);
+        }, *pipeline_cache);
+    }
     const VkGraphicsPipelineLibraryCreateInfoEXT fragment_output_ci{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
         .pNext = nullptr,
