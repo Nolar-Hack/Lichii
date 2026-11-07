@@ -37,6 +37,7 @@
 
 #include "common/common_types.h"
 #include "common/fs/path_util.h"
+#include "common/scope_exit.h"
 #include "main_window.h"
 #include "render/adventure_notes.h"
 
@@ -318,23 +319,29 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setMaximumHeight(330);
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(14, 11, 10, 12);
     layout->setSpacing(7);
     layout->addLayout(top);
     layout->addWidget(views);
-    layout->addWidget(scroll);
-    setFixedWidth(286);
+    layout->addWidget(scroll, 1);
+    grip = new QLabel(QStringLiteral("⌟"), this);
+    grip->setObjectName(QStringLiteral("subtitle"));
+    grip->setCursor(Qt::SizeFDiagCursor);
+    grip->installEventFilter(this);
+    layout->addWidget(grip, 0, Qt::AlignRight);
+    setMinimumWidth(230);
 
     connect(views, &QComboBox::currentIndexChanged, this, &AdventureNotes::Refresh);
     connect(collapse, &QToolButton::clicked, this, [this] {
         const bool visible = !scroll->isVisible();
         scroll->setVisible(visible);
         views->setVisible(visible);
+        grip->setVisible(visible);
         collapse->setText(visible ? QStringLiteral("–") : QStringLiteral("+"));
-        adjustSize();
+        sized_by_hand = false;
+        FitContent();
     });
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &AdventureNotes::Refresh);
@@ -342,7 +349,23 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
     Refresh();
 }
 
+void AdventureNotes::FitContent() {
+    if (sized_by_hand) {
+        return;
+    }
+    // As tall as what it shows, up to a limit: a short view stays small.
+    constexpr int MaxListHeight = 330;
+    rows->activate();
+    const int wanted = std::min(body->sizeHint().height(), MaxListHeight);
+    scroll->setMinimumHeight(wanted);
+    scroll->setMaximumHeight(wanted);
+    adjustSize();
+}
+
 void AdventureNotes::Refresh() {
+    SCOPE_EXIT {
+        FitContent();
+    };
     while (QLayoutItem* item = rows->takeAt(0)) {
         delete item->widget();
         delete item;
@@ -488,6 +511,16 @@ void AdventureNotes::mouseMoveEvent(QMouseEvent* event) {
 }
 
 bool AdventureNotes::eventFilter(QObject* object, QEvent* event) {
+    if (object == grip && event->type() == QEvent::MouseButtonPress) {
+        // By hand from now on: the list takes what the window gives it.
+        sized_by_hand = true;
+        scroll->setMinimumHeight(0);
+        scroll->setMaximumHeight(QWIDGETSIZE_MAX);
+        if (windowHandle()) {
+            windowHandle()->startSystemResize(Qt::RightEdge | Qt::BottomEdge);
+        }
+        return true;
+    }
     if ((object == header || object == subtitle) && event->type() == QEvent::MouseButtonPress) {
         const auto* mouse = static_cast<QMouseEvent*>(event);
         if (mouse->button() == Qt::LeftButton) {
