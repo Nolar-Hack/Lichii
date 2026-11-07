@@ -1002,7 +1002,7 @@
    ]
   },
   {
-   "name": "Quarts de cœur",
+   "name": "Quarts de cœur sur la carte",
    "zones": [
     {
      "name": "Cimetière",
@@ -1235,6 +1235,28 @@
       "0xfa4541fe1a2d0d44",
       "0xfbeaa8e3bc7e4090"
      ]
+    }
+   ]
+  }
+ ],
+ "summary": [
+  {
+   "title": "Quarts de cœur ramassés",
+   "terms": [
+    {
+     "hash": "0xfbe01da1",
+     "scale": 1
+    },
+    {
+     "hash": "0x51ec97b3",
+     "scale": 1
+    },
+    {
+     "collection": 2,
+     "scale": -4
+    },
+    {
+     "constant": -12
     }
    ]
   }

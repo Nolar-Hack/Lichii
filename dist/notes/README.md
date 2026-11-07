@@ -10,5 +10,7 @@ user folder, with the program ID in 16 upper-case hex digits. No rebuild is need
 - `fields`: `title`, 32-bit `hash`, `kind`: `count` (64-bit value at the offset), `flag` or `number`.
 - `collections`: `name`, then `zones` of `name` and 64-bit `keys`, counted when in the save.
 
+- `summary`: Global lines, `title` and `terms` of `hash`, `collection` or `constant`, with `scale`.
+
 A view whose name matches a zone also shows that zone's collections. Keep game content out of a
 module: identifiers and short names only.
