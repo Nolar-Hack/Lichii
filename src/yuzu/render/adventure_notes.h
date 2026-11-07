@@ -3,27 +3,31 @@
 
 #pragma once
 
+#include <array>
 #include <filesystem>
 #include <memory>
+#include <vector>
 
+#include <QSize>
 #include <QWidget>
 
 #include "common/common_types.h"
+#include "render/adventure_script.h"
 
 class MainWindow;
+class QBoxLayout;
+class QComboBox;
 class QGridLayout;
+class QHBoxLayout;
 class QLabel;
 class QScrollArea;
-class QTabBar;
-class QComboBox;
 class QTimer;
 class QToolButton;
-class QWidget;
-
-struct GameNotes;
 
 /// A game's adventure records, read from its newest save. Nothing is written: the numbers change
-/// when the game saves. A game is added with a module, notes/<program id>.json in the user folder.
+/// when the game saves. A game is added with a module, notes/<program id>.js in the user folder:
+/// it reads the save and returns what to show, so the panel knows no save format.
+/// It has two layouts: a tall one with its tabs on a side rail, and a wide strip.
 class AdventureNotes : public QWidget {
     Q_OBJECT
 
@@ -44,29 +48,62 @@ protected:
 private:
     void Refresh();
     void StartDrag(QPoint position);
-    void FitContent();
     void FillViews();
     void LoadGame();
+    void ReadSave();
+    void ClearTabs();
+    void ClearRows();
     void ShowMessage(const QString& text);
     void CreateModule();
     void CheckFiles();
+    void ApplyLayout();
+    void SwitchLayout();
+    void ToggleFold();
+    void BuildTabs();
+    void MarkTabs();
+    void BuildKeys();
+    void SelectTab(int index);
+    void SetAccent(const QString& color);
+    void SaveSettings();
+    [[nodiscard]] QWidget* MakeRow(const NotesRow& line, std::vector<QLabel*>& values);
 
-    std::unique_ptr<GameNotes> game;
+    std::unique_ptr<NotesScript> script;
+    NotesReport report;
+    QString slot;
+    QString accent;
     u64 program_id = 0;
     std::filesystem::file_time_type module_time{};
     std::filesystem::file_time_type save_time{};
+    bool strip = false;
+    bool collapsed = false;
+    int current_tab = 0;
+    QString tab_name;  ///< Kept when the tabs are rebuilt, to come back to the same page.
+    QString view_name;
+    std::array<QSize, 2> sizes;
+    QSize open_size;
     QLabel* header = nullptr;
     QLabel* subtitle = nullptr;
     QScrollArea* scroll = nullptr;
     QLabel* grip = nullptr;
-    bool sized_by_hand = false;
-    QTabBar* tabs = nullptr;
     QComboBox* views = nullptr;
     QWidget* body = nullptr;
     QGridLayout* rows = nullptr;
+    QWidget* rail = nullptr;
+    QBoxLayout* rail_layout = nullptr;
+    QWidget* content = nullptr;
+    QHBoxLayout* top = nullptr;
+    QBoxLayout* column = nullptr;
+    QWidget* tab_box = nullptr;
+    QBoxLayout* tab_layout = nullptr;
+    QWidget* key_box = nullptr;
+    QHBoxLayout* key_layout = nullptr;
+    QWidget* tools = nullptr;
+    QBoxLayout* tools_layout = nullptr;
     QToolButton* collapse = nullptr;
-    QTimer* timer = nullptr;
+    QToolButton* flip = nullptr;
+    QToolButton* reload = nullptr;
     QToolButton* create = nullptr;
+    QTimer* timer = nullptr;
     QPoint drag_start;
     bool dragging = false;
 };
