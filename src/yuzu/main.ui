@@ -603,7 +603,7 @@
     <bool>true</bool>
    </property>
    <property name="text">
-    <string>Notes d'aventure</string>
+    <string>Adventure Notes</string>
    </property>
    <property name="enabled">
     <bool>false</bool>
