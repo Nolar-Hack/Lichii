@@ -120,7 +120,7 @@ jobs:
             autoconf cmake g++ gcc git glslang-tools libglu1-mesa-dev \
             libpulse-dev libtool libudev-dev libxkbcommon-x11-0 \
             mesa-common-dev nasm ninja-build qt6-base-private-dev \
-            qt6-charts-dev qt6-tools-dev libavfilter-dev libavcodec-dev \
+            qt6-charts-dev qt6-declarative-dev qt6-tools-dev libavfilter-dev libavcodec-dev \
             libswscale-dev pkg-config zlib1g-dev libva-dev libvdpau-dev \
             spirv-tools spirv-headers libusb-1.0-0-dev \
             libboost-dev libboost-fiber-dev libboost-context-dev \
@@ -259,7 +259,7 @@ jobs:
             git make autoconf libtool automake-wrapper patch jq pactoys ninja
           pacboy: >-
             toolchain:p clang:p lld:p cmake:p python-pip:p
-            qt6-base:p qt6-charts:p qt6-tools:p qt6-translations:p qt6-svg:p
+            qt6-base:p qt6-charts:p qt6-declarative:p qt6-tools:p qt6-translations:p qt6-svg:p
             openssl:p boost:p fmt:p lz4:p nlohmann-json:p zlib:p zstd:p libiconv:p
             vulkan-memory-allocator:p vulkan-devel:p glslang:p enet:p opus:p
             libusb:p unordered_dense:p jbigkit:p xz:p libdeflate:p bzip2:p
