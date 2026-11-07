@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <memory>
 
 #include <QWidget>
@@ -30,9 +31,6 @@ public:
     AdventureNotes(MainWindow* parent, u64 program_id);
     ~AdventureNotes() override;
 
-    /// Whether a module exists for this game.
-    [[nodiscard]] static bool Supports(u64 program_id);
-
 signals:
     void closed();
 
@@ -48,8 +46,13 @@ private:
     void StartDrag(QPoint position);
     void FitContent();
     void FillViews();
+    void LoadGame();
+    void ShowMessage(const QString& text);
+    void CreateModule();
 
     std::unique_ptr<GameNotes> game;
+    u64 program_id = 0;
+    std::filesystem::file_time_type module_time{};
     QLabel* header = nullptr;
     QLabel* subtitle = nullptr;
     QScrollArea* scroll = nullptr;
@@ -61,6 +64,7 @@ private:
     QGridLayout* rows = nullptr;
     QToolButton* collapse = nullptr;
     QTimer* timer = nullptr;
+    QToolButton* create = nullptr;
     QPoint drag_start;
     bool dragging = false;
 };
