@@ -45,11 +45,14 @@ protected:
 private:
     void Refresh();
     void StartDrag(QPoint position);
+    void FitContent();
 
     std::unique_ptr<GameNotes> game;
     QLabel* header = nullptr;
     QLabel* subtitle = nullptr;
     QScrollArea* scroll = nullptr;
+    QLabel* grip = nullptr;
+    bool sized_by_hand = false;
     QComboBox* views = nullptr;
     QWidget* body = nullptr;
     QGridLayout* rows = nullptr;
