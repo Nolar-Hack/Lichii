@@ -349,12 +349,12 @@ void AdventureNotes::Refresh() {
     }
     const auto path = game ? NewestSave(*game) : std::nullopt;
     if (!path) {
-        header->setText(tr("Aucune sauvegarde trouvée"));
+        header->setText(tr("No save found"));
         return;
     }
     const SaveTable save{*path};
     if (!save.Valid()) {
-        header->setText(tr("Sauvegarde illisible"));
+        header->setText(tr("Unreadable save"));
         return;
     }
     const s64 seconds = save.Read(game->play_time_hash, FieldKind::Count);

@@ -10,31 +10,31 @@
  "play_time": "0xce97845e",
  "views": [
   {
-   "name": "Stats · Résumé",
+   "name": "Stats · Summary",
    "checklist": false,
    "fields": [
     {
-     "title": "Morts",
+     "title": "Deaths",
      "hash": "0x8bc1257a",
      "kind": "count"
     },
     {
-     "title": "Ennemis vaincus",
+     "title": "Enemies defeated",
      "hash": "0xf7cb0ee2",
      "kind": "count"
     },
     {
-     "title": "Skulltulas d'or",
+     "title": "Gold Skulltulas",
      "hash": "0x15ea6aa2",
      "kind": "count"
     },
     {
-     "title": "Coffres",
+     "title": "Chests",
      "hash": "0x4766a777",
      "kind": "count"
     },
     {
-     "title": "Rubis ramassés",
+     "title": "Rupees collected",
      "hash": "0x0b7f5726",
      "kind": "count"
     }
@@ -45,27 +45,27 @@
    "checklist": false,
    "fields": [
     {
-     "title": "Morts",
+     "title": "Deaths",
      "hash": "0x8bc1257a",
      "kind": "count"
     },
     {
-     "title": "Ennemis vaincus",
+     "title": "Enemies defeated",
      "hash": "0xf7cb0ee2",
      "kind": "count"
     },
     {
-     "title": "Coups d'épée",
+     "title": "Sword swings",
      "hash": "0x2a24450a",
      "kind": "count"
     },
     {
-     "title": "Objets utilisés",
+     "title": "Items used",
      "hash": "0x1957b8c5",
      "kind": "count"
     },
     {
-     "title": "Magie dépensée",
+     "title": "Magic spent",
      "hash": "0xf5f1954d",
      "kind": "count"
     }
@@ -76,37 +76,37 @@
    "checklist": false,
    "fields": [
     {
-     "title": "Distance parcourue",
+     "title": "Distance travelled",
      "hash": "0x3eeafadd",
      "kind": "count"
     },
     {
-     "title": "Temps sous l'eau",
+     "title": "Time underwater",
      "hash": "0x392c7b86",
      "kind": "count"
     },
     {
-     "title": "Vol de cocotte",
+     "title": "Cucco flight",
      "hash": "0xe8c057bc",
      "kind": "count"
     },
     {
-     "title": "Pierres soulevées",
+     "title": "Rocks lifted",
      "hash": "0x30bbe1d8",
      "kind": "count"
     },
     {
-     "title": "Pierres à potins",
+     "title": "Gossip Stones",
      "hash": "0x70d7014b",
      "kind": "count"
     },
     {
-     "title": "Skulltulas d'or",
+     "title": "Gold Skulltulas",
      "hash": "0x15ea6aa2",
      "kind": "count"
     },
     {
-     "title": "Coffres",
+     "title": "Chests",
      "hash": "0x4766a777",
      "kind": "count"
     }
@@ -117,59 +117,59 @@
    "checklist": false,
    "fields": [
     {
-     "title": "Roulades",
+     "title": "Rolls",
      "hash": "0x4ac3ff5d",
      "kind": "count"
     },
     {
-     "title": "Sauts",
+     "title": "Jumps",
      "hash": "0xa6454431",
      "kind": "count"
     },
     {
-     "title": "Pots cassés",
+     "title": "Pots broken",
      "hash": "0xcb183657",
      "kind": "count"
     },
     {
-     "title": "Herbe coupée",
+     "title": "Grass cut",
      "hash": "0x824b47b1",
      "kind": "count"
     },
     {
-     "title": "Ocarina joué",
+     "title": "Ocarina played",
      "hash": "0xd457ee3a",
      "kind": "count"
     },
     {
-     "title": "Discussions",
+     "title": "Conversations",
      "hash": "0x64b98a4e",
      "kind": "count"
     },
     {
-     "title": "Discussions avec Navi",
+     "title": "Talks with Navi",
      "hash": "0xc0be46bc",
      "kind": "count"
     },
     {
-     "title": "Mini-jeux",
+     "title": "Minigames",
      "hash": "0x3f31ad53",
      "kind": "count"
     },
     {
-     "title": "Pêche",
+     "title": "Fishing",
      "hash": "0xcaa00e60",
      "kind": "count"
     },
     {
-     "title": "Amiibo",
+     "title": "amiibo",
      "hash": "0xfd680ada",
      "kind": "count"
     }
    ]
   },
   {
-   "name": "Chansons",
+   "name": "Songs",
    "checklist": true,
    "fields": [
     {
@@ -240,7 +240,7 @@
    ]
   },
   {
-   "name": "Quêtes",
+   "name": "Quest items",
    "checklist": true,
    "fields": [
     {
@@ -291,459 +291,459 @@
    ]
   },
   {
-   "name": "Lieux visités",
+   "name": "Visited places",
    "checklist": true,
    "fields": [
     {
-     "title": "Fond du puits",
+     "title": "Bottom of the Well",
      "hash": "0xb43c6db8",
      "kind": "flag"
     },
     {
-     "title": "Montagne de la Mort - Cratère",
+     "title": "Death Mountain Crater",
      "hash": "0xd0e4b0da",
      "kind": "flag"
     },
     {
-     "title": "Montagne de la Mort - Sentier",
+     "title": "Death Mountain Trail",
      "hash": "0x3c72143a",
      "kind": "flag"
     },
     {
-     "title": "Colosse de la Déesse maléfique",
+     "title": "Evil Desert Colossus",
      "hash": "0x607d9fe6",
      "kind": "flag"
     },
     {
-     "title": "Caverne Dodongo",
+     "title": "Dodongo Cavern",
      "hash": "0xf40f022c",
      "kind": "flag"
     },
     {
-     "title": "Amphithéâtre des monstres",
+     "title": "Hall of Fallen Foes",
      "hash": "0x029c8eef",
      "kind": "flag"
     },
     {
-     "title": "Temple du Feu",
+     "title": "Fire Temple",
      "hash": "0x0dc6bad4",
      "kind": "flag"
     },
     {
-     "title": "Temple de la Forêt",
+     "title": "Forest Temple",
      "hash": "0x9678793b",
      "kind": "flag"
     },
     {
-     "title": "Château de Ganondorf",
+     "title": "Ganondorf's Castle",
      "hash": "0xdfdc011d",
      "kind": "flag"
     },
     {
-     "title": "Forteresse Gerudo",
+     "title": "Gerudo Fortress",
      "hash": "0x3d07b702",
      "kind": "flag"
     },
     {
-     "title": "Gymnase Gerudo",
+     "title": "Gerudo Proving Grounds",
      "hash": "0xd36129a6",
      "kind": "flag"
     },
     {
-     "title": "Vallée Gerudo",
+     "title": "Gerudo Valley",
      "hash": "0x5a6c8704",
      "kind": "flag"
     },
     {
-     "title": "Village Goron",
+     "title": "Goron City",
      "hash": "0xecf401b9",
      "kind": "flag"
     },
     {
-     "title": "Cimetière",
+     "title": "Graveyard",
      "hash": "0x671a6e1b",
      "kind": "flag"
     },
     {
-     "title": "Désert des Mirages",
+     "title": "Mirage Desert",
      "hash": "0x6160c3ec",
      "kind": "flag"
     },
     {
-     "title": "Château d'Hyrule",
+     "title": "Hyrule Castle",
      "hash": "0xb7c0f231",
      "kind": "flag"
     },
     {
-     "title": "Plaine d'Hyrule",
+     "title": "Hyrule Field",
      "hash": "0xdda673cb",
      "kind": "flag"
     },
     {
-     "title": "Caverne Polaire",
+     "title": "Ice Cavern",
      "hash": "0xa9bbc0e4",
      "kind": "flag"
     },
     {
-     "title": "Ranch Ingo",
+     "title": "Ingo Ranch",
      "hash": "0xdb98688c",
      "kind": "flag"
     },
     {
-     "title": "Intérieur du château de Ganondorf",
+     "title": "Inside Ganondorf's Castle",
      "hash": "0x607a448c",
      "kind": "flag"
     },
     {
-     "title": "Ventre du grand Jabu-Jabu",
+     "title": "Lord Jabu-Jabu's Belly",
      "hash": "0x9e5ca01c",
      "kind": "flag"
     },
     {
-     "title": "Vénérable Arbre Mojo",
+     "title": "Great Deku Tree",
      "hash": "0x94493c6f",
      "kind": "flag"
     },
     {
-     "title": "Village de Cocorico",
+     "title": "Kakariko Village",
      "hash": "0x5c9e740f",
      "kind": "flag"
     },
     {
-     "title": "Forêt Kokiri",
+     "title": "Kokiri Forest",
      "hash": "0x2e315eb6",
      "kind": "flag"
     },
     {
-     "title": "Lac Hylia",
+     "title": "Lake Hylia",
      "hash": "0x36778630",
      "kind": "flag"
     },
     {
-     "title": "Ranch Lon Lon",
+     "title": "Lon Lon Ranch",
      "hash": "0x009c5b53",
      "kind": "flag"
     },
     {
-     "title": "Bois Perdus",
+     "title": "Lost Woods",
      "hash": "0xbd536912",
      "kind": "flag"
     },
     {
-     "title": "Citadelle d'Hyrule",
+     "title": "Hyrule Castle Town",
      "hash": "0xc88633f0",
      "kind": "flag"
     },
     {
-     "title": "Sanctuaire de la Forêt",
+     "title": "Sacred Grove",
      "hash": "0xeb724c83",
      "kind": "flag"
     },
     {
-     "title": "Temple de l'Ombre",
+     "title": "Shadow Temple",
      "hash": "0x1f9a9780",
      "kind": "flag"
     },
     {
-     "title": "Temple de l'Esprit",
+     "title": "Spirit Temple",
      "hash": "0x20e6e16d",
      "kind": "flag"
     },
     {
-     "title": "Temple du Temps",
+     "title": "Temple of Time",
      "hash": "0x41c9b07b",
      "kind": "flag"
     },
     {
-     "title": "Temple de l'Eau",
+     "title": "Water Temple",
      "hash": "0x463a8f77",
      "kind": "flag"
     },
     {
-     "title": "Domaine Zora",
+     "title": "Zora Domain",
      "hash": "0xede02703",
      "kind": "flag"
     },
     {
-     "title": "Fontaine Zora",
+     "title": "Zora Fountain",
      "hash": "0x5de8bbd8",
      "kind": "flag"
     },
     {
-     "title": "Rivière Zora",
+     "title": "Zora River",
      "hash": "0x2e975eed",
      "kind": "flag"
     }
    ]
   },
   {
-   "name": "Skulltulas par zone",
+   "name": "Gold Skulltulas by area",
    "checklist": false,
    "collection": 0
   },
   {
-   "name": "Quarts de cœur (sur la carte)",
+   "name": "Heart Pieces on the map",
    "checklist": false,
    "collection": 1
   },
   {
-   "name": "Réceptacles de cœur",
+   "name": "Heart Containers",
    "checklist": false,
    "collection": 2
   },
   {
-   "name": "Rubis d'argent",
+   "name": "Silver Rupees",
    "checklist": false,
    "collection": 3
   },
   {
-   "name": "Vénérable Arbre Mojo",
+   "name": "Great Deku Tree",
    "checklist": true,
    "fields": [
     {
-     "title": "Carte",
+     "title": "Map",
      "hash": "0x89787395",
      "kind": "flag"
     },
     {
-     "title": "Boussole",
+     "title": "Compass",
      "hash": "0x06c51ff2",
      "kind": "flag"
     }
    ]
   },
   {
-   "name": "Caverne Dodongo",
+   "name": "Dodongo Cavern",
    "checklist": true,
    "fields": [
     {
-     "title": "Carte",
+     "title": "Map",
      "hash": "0xa52c3a19",
      "kind": "flag"
     },
     {
-     "title": "Boussole",
+     "title": "Compass",
      "hash": "0x8b93edf9",
      "kind": "flag"
     }
    ]
   },
   {
-   "name": "Ventre du grand Jabu-Jabu",
+   "name": "Lord Jabu-Jabu's Belly",
    "checklist": true,
    "fields": [
     {
-     "title": "Carte",
+     "title": "Map",
      "hash": "0xfcadd210",
      "kind": "flag"
     },
     {
-     "title": "Boussole",
+     "title": "Compass",
      "hash": "0x9a2218db",
      "kind": "flag"
     }
    ]
   },
   {
-   "name": "Temple de la Forêt",
+   "name": "Forest Temple",
    "checklist": true,
    "fields": [
     {
-     "title": "Carte",
+     "title": "Map",
      "hash": "0xe704f9b4",
      "kind": "flag"
     },
     {
-     "title": "Boussole",
+     "title": "Compass",
      "hash": "0xf240eeb2",
      "kind": "flag"
     },
     {
-     "title": "Clé du boss",
+     "title": "Boss key",
      "hash": "0x427333a0",
      "kind": "flag"
     },
     {
-     "title": "Petites clés en main (5 dans le donjon)",
+     "title": "Small keys held (5 in the dungeon)",
      "hash": "0x90237092",
      "kind": "number"
     }
    ]
   },
   {
-   "name": "Temple du Feu",
+   "name": "Fire Temple",
    "checklist": true,
    "fields": [
     {
-     "title": "Carte",
+     "title": "Map",
      "hash": "0x5b3ac0ba",
      "kind": "flag"
     },
     {
-     "title": "Boussole",
+     "title": "Compass",
      "hash": "0x0aa068b6",
      "kind": "flag"
     },
     {
-     "title": "Clé du boss",
+     "title": "Boss key",
      "hash": "0xb72d73df",
      "kind": "flag"
     },
     {
-     "title": "Petites clés en main (8 dans le donjon)",
+     "title": "Small keys held (8 in the dungeon)",
      "hash": "0x1df11487",
      "kind": "number"
     }
    ]
   },
   {
-   "name": "Temple de l'Eau",
+   "name": "Water Temple",
    "checklist": true,
    "fields": [
     {
-     "title": "Carte",
+     "title": "Map",
      "hash": "0x4a4402ab",
      "kind": "flag"
     },
     {
-     "title": "Boussole",
+     "title": "Compass",
      "hash": "0x2e82c8fe",
      "kind": "flag"
     },
     {
-     "title": "Clé du boss",
+     "title": "Boss key",
      "hash": "0x79daf80a",
      "kind": "flag"
     },
     {
-     "title": "Petites clés en main (4 dans le donjon)",
+     "title": "Small keys held (4 in the dungeon)",
      "hash": "0x877bdcee",
      "kind": "number"
     }
    ]
   },
   {
-   "name": "Temple de l'Ombre",
+   "name": "Shadow Temple",
    "checklist": true,
    "fields": [
     {
-     "title": "Carte",
+     "title": "Map",
      "hash": "0xf6177b93",
      "kind": "flag"
     },
     {
-     "title": "Boussole",
+     "title": "Compass",
      "hash": "0x1e2feec5",
      "kind": "flag"
     },
     {
-     "title": "Clé du boss",
+     "title": "Boss key",
      "hash": "0xc33c66cf",
      "kind": "flag"
     },
     {
-     "title": "Petites clés en main (5 dans le donjon)",
+     "title": "Small keys held (5 in the dungeon)",
      "hash": "0x5edda9e3",
      "kind": "number"
     }
    ]
   },
   {
-   "name": "Temple de l'Esprit",
+   "name": "Spirit Temple",
    "checklist": true,
    "fields": [
     {
-     "title": "Carte",
+     "title": "Map",
      "hash": "0xb85002ba",
      "kind": "flag"
     },
     {
-     "title": "Boussole",
+     "title": "Compass",
      "hash": "0x9bd1181c",
      "kind": "flag"
     },
     {
-     "title": "Clé du boss",
+     "title": "Boss key",
      "hash": "0x1984c03f",
      "kind": "flag"
     },
     {
-     "title": "Petites clés en main (5 dans le donjon)",
+     "title": "Small keys held (5 in the dungeon)",
      "hash": "0x79eeec8e",
      "kind": "number"
     }
    ]
   },
   {
-   "name": "Fond du puits",
+   "name": "Bottom of the Well",
    "checklist": true,
    "fields": [
     {
-     "title": "Carte",
+     "title": "Map",
      "hash": "0x77c47ec9",
      "kind": "flag"
     },
     {
-     "title": "Boussole",
+     "title": "Compass",
      "hash": "0x9d6efaac",
      "kind": "flag"
     },
     {
-     "title": "Petites clés en main (2 dans le donjon)",
+     "title": "Small keys held (2 in the dungeon)",
      "hash": "0x7dd79d10",
      "kind": "number"
     }
    ]
   },
   {
-   "name": "Caverne Polaire",
+   "name": "Ice Cavern",
    "checklist": true,
    "fields": [
     {
-     "title": "Carte",
+     "title": "Map",
      "hash": "0x322f2a94",
      "kind": "flag"
     },
     {
-     "title": "Boussole",
+     "title": "Compass",
      "hash": "0xea1846e6",
      "kind": "flag"
     }
    ]
   },
   {
-   "name": "Gymnase Gerudo",
+   "name": "Gerudo Proving Grounds",
    "checklist": true,
    "fields": [
     {
-     "title": "Petites clés en main (9 dans le donjon)",
+     "title": "Small keys held (9 in the dungeon)",
      "hash": "0xea9786f5",
      "kind": "number"
     }
    ]
   },
   {
-   "name": "Intérieur du château de Ganondorf",
+   "name": "Inside Ganondorf's Castle",
    "checklist": true,
    "fields": [
     {
-     "title": "Clé du boss",
+     "title": "Boss key",
      "hash": "0x2fd59293",
      "kind": "flag"
     },
     {
-     "title": "Petites clés en main (1 dans le donjon)",
+     "title": "Small keys held (1 in the dungeon)",
      "hash": "0xfbfd2910",
      "kind": "number"
     }
    ]
   },
   {
-   "name": "Forteresse Gerudo",
+   "name": "Gerudo Fortress",
    "checklist": true,
    "fields": [
     {
-     "title": "Petites clés en main (11 dans le donjon)",
+     "title": "Small keys held (11 in the dungeon)",
      "hash": "0x3a28b6a4",
      "kind": "number"
     }
@@ -752,10 +752,10 @@
  ],
  "collections": [
   {
-   "name": "Skulltulas d'or",
+   "name": "Gold Skulltulas",
    "zones": [
     {
-     "name": "Vénérable Arbre Mojo",
+     "name": "Great Deku Tree",
      "keys": [
       "0xbce05898ce61f1c0",
       "0xdf73f3739cef466b",
@@ -764,7 +764,7 @@
      ]
     },
     {
-     "name": "Bois Perdus",
+     "name": "Lost Woods",
      "keys": [
       "0x3c2b585ac5c0443e",
       "0x8186bcb07d6c2cf9",
@@ -772,13 +772,13 @@
      ]
     },
     {
-     "name": "Sanctuaire de la Forêt",
+     "name": "Sacred Grove",
      "keys": [
       "0xc8db3346f78ea31b"
      ]
     },
     {
-     "name": "Caverne Dodongo",
+     "name": "Dodongo Cavern",
      "keys": [
       "0x0d53e429a1ef383d",
       "0x10434342a3917ebd",
@@ -788,7 +788,7 @@
      ]
     },
     {
-     "name": "Caverne Polaire",
+     "name": "Ice Cavern",
      "keys": [
       "0x165fc0bc0aca1f6c",
       "0x63701a2cf70b201c",
@@ -796,27 +796,27 @@
      ]
     },
     {
-     "name": "Château de Ganondorf",
+     "name": "Ganondorf's Castle",
      "keys": [
       "0x4e13cc311cd04df4"
      ]
     },
     {
-     "name": "Château d'Hyrule",
+     "name": "Hyrule Castle",
      "keys": [
       "0x22c0f7dff5ebb86d",
       "0x7f28485fa5d3688f"
      ]
     },
     {
-     "name": "Cimetière",
+     "name": "Graveyard",
      "keys": [
       "0x032f42f523be6425",
       "0xe91f6be796358ffc"
      ]
     },
     {
-     "name": "Village de Cocorico",
+     "name": "Kakariko Village",
      "keys": [
       "0x2df265292516bdf0",
       "0x6a8d9b2373d08fcb",
@@ -827,7 +827,7 @@
      ]
     },
     {
-     "name": "Colosse de la Déesse maléfique",
+     "name": "Evil Desert Colossus",
      "keys": [
       "0x0341f2c03598c861",
       "0x9ae3d0ac392e6cda",
@@ -835,26 +835,26 @@
      ]
     },
     {
-     "name": "Montagne de la Mort - Cratère",
+     "name": "Death Mountain Crater",
      "keys": [
       "0x58c75badf059ca54",
       "0xfcd7f04dcf755e8e"
      ]
     },
     {
-     "name": "Domaine Zora",
+     "name": "Zora Domain",
      "keys": [
       "0x853b892663c0215d"
      ]
     },
     {
-     "name": "Désert des Mirages",
+     "name": "Mirage Desert",
      "keys": [
       "0xceed596f17934971"
      ]
     },
     {
-     "name": "Fontaine Zora",
+     "name": "Zora Fountain",
      "keys": [
       "0x63446d12663daa83",
       "0x845ba51dc18c855e",
@@ -862,14 +862,14 @@
      ]
     },
     {
-     "name": "Forteresse Gerudo",
+     "name": "Gerudo Fortress",
      "keys": [
       "0x81ed4ed76699e3d8",
       "0xb4ece769e6f3a206"
      ]
     },
     {
-     "name": "Forêt Kokiri",
+     "name": "Kokiri Forest",
      "keys": [
       "0x62c340f0b876c195",
       "0x858f5000ad57b2cc",
@@ -877,13 +877,13 @@
      ]
     },
     {
-     "name": "Citadelle d'Hyrule",
+     "name": "Hyrule Castle Town",
      "keys": [
       "0x7c1a05315f83c34d"
      ]
     },
     {
-     "name": "Plaine d'Hyrule",
+     "name": "Hyrule Field",
      "keys": [
       "0x04be4a8ff29f2099",
       "0x0af4d6f063d3ae9f",
@@ -899,7 +899,7 @@
      ]
     },
     {
-     "name": "Fond du puits",
+     "name": "Bottom of the Well",
      "keys": [
       "0x35fb354fac262d36",
       "0x6789388e9fb9c92c",
@@ -907,7 +907,7 @@
      ]
     },
     {
-     "name": "Rivière Zora",
+     "name": "Zora River",
      "keys": [
       "0x78ae4fd90b3cfaaa",
       "0x8325fea55edfbe97",
@@ -916,7 +916,7 @@
      ]
     },
     {
-     "name": "Montagne de la Mort - Sentier",
+     "name": "Death Mountain Trail",
      "keys": [
       "0x04e03ac27985e328",
       "0x0b8e43abfa0b5f86",
@@ -925,7 +925,7 @@
      ]
     },
     {
-     "name": "Temple de l'Eau",
+     "name": "Water Temple",
      "keys": [
       "0x02974596f92cf377",
       "0x3d0de5adaeb73cc9",
@@ -935,7 +935,7 @@
      ]
     },
     {
-     "name": "Temple de l'Esprit",
+     "name": "Spirit Temple",
      "keys": [
       "0x4696b2730de0516c",
       "0x70b0fca66ca4808a",
@@ -945,7 +945,7 @@
      ]
     },
     {
-     "name": "Temple de l'Ombre",
+     "name": "Shadow Temple",
      "keys": [
       "0x7a74bc651f9fe024",
       "0x8e87908cb035e950",
@@ -955,7 +955,7 @@
      ]
     },
     {
-     "name": "Temple de la Forêt",
+     "name": "Forest Temple",
      "keys": [
       "0x1bf5f0176ef03bda",
       "0x2aa39f00aaa2d331",
@@ -965,7 +965,7 @@
      ]
     },
     {
-     "name": "Temple du Feu",
+     "name": "Fire Temple",
      "keys": [
       "0x4d1b7e35ca0c6484",
       "0x5e3ae6a7cf3ac292",
@@ -975,7 +975,7 @@
      ]
     },
     {
-     "name": "Vallée Gerudo",
+     "name": "Gerudo Valley",
      "keys": [
       "0x738f5746cc517702",
       "0xa017ce09904c2dce",
@@ -984,7 +984,7 @@
      ]
     },
     {
-     "name": "Ventre du grand Jabu-Jabu",
+     "name": "Lord Jabu-Jabu's Belly",
      "keys": [
       "0x9c95fd41b89c058a",
       "0x9fc92497f014dbd5",
@@ -993,7 +993,7 @@
      ]
     },
     {
-     "name": "Village Goron",
+     "name": "Goron City",
      "keys": [
       "0x07e6e21142cc54db",
       "0xfbbc2d490276c68e"
@@ -1002,63 +1002,63 @@
    ]
   },
   {
-   "name": "Quarts de cœur sur la carte",
+   "name": "Heart Pieces on the map",
    "zones": [
     {
-     "name": "Cimetière",
+     "name": "Graveyard",
      "keys": [
       "0x1df0dbf50c1732b7"
      ]
     },
     {
-     "name": "Village de Cocorico",
+     "name": "Kakariko Village",
      "keys": [
       "0xb9d0070b468f26d2",
       "0xf8c7601da7dd887e"
      ]
     },
     {
-     "name": "Colosse de la Déesse maléfique",
+     "name": "Evil Desert Colossus",
      "keys": [
       "0x92feab9a9810c619"
      ]
     },
     {
-     "name": "Montagne de la Mort - Cratère",
+     "name": "Death Mountain Crater",
      "keys": [
       "0x0a564328faf93c71",
       "0x8f5f3d3321aeb7cd"
      ]
     },
     {
-     "name": "Fontaine Zora",
+     "name": "Zora Fountain",
      "keys": [
       "0x6f736fc80f7b0aca",
       "0xac2e26b5ec7da3a2"
      ]
     },
     {
-     "name": "Plaine d'Hyrule",
+     "name": "Hyrule Field",
      "keys": [
       "0x88358af5b5300aa9",
       "0xbaec91d6ed8dd96b"
      ]
     },
     {
-     "name": "Rivière Zora",
+     "name": "Zora River",
      "keys": [
       "0x3a23b59eaedc0510",
       "0x9efabd5b0516c341"
      ]
     },
     {
-     "name": "Montagne de la Mort - Sentier",
+     "name": "Death Mountain Trail",
      "keys": [
       "0x09ecb6a0150fee97"
      ]
     },
     {
-     "name": "Vallée Gerudo",
+     "name": "Gerudo Valley",
      "keys": [
       "0xdfd66c63357cdea7"
      ]
@@ -1066,52 +1066,52 @@
    ]
   },
   {
-   "name": "Réceptacles de cœur",
+   "name": "Heart Containers",
    "zones": [
     {
-     "name": "Vénérable Arbre Mojo",
+     "name": "Great Deku Tree",
      "keys": [
       "0xf914fa367471a3e3"
      ]
     },
     {
-     "name": "Caverne Dodongo",
+     "name": "Dodongo Cavern",
      "keys": [
       "0x5262cea56c53554d"
      ]
     },
     {
-     "name": "Temple de l'Eau",
+     "name": "Water Temple",
      "keys": [
       "0xc835e1d03656bf46"
      ]
     },
     {
-     "name": "Temple de l'Esprit",
+     "name": "Spirit Temple",
      "keys": [
       "0x41811f125b1eedd5"
      ]
     },
     {
-     "name": "Temple de l'Ombre",
+     "name": "Shadow Temple",
      "keys": [
       "0xf43ccb260f5576dc"
      ]
     },
     {
-     "name": "Temple de la Forêt",
+     "name": "Forest Temple",
      "keys": [
       "0xff11593a22778e7e"
      ]
     },
     {
-     "name": "Temple du Feu",
+     "name": "Fire Temple",
      "keys": [
       "0x8389cafb1277d318"
      ]
     },
     {
-     "name": "Ventre du grand Jabu-Jabu",
+     "name": "Lord Jabu-Jabu's Belly",
      "keys": [
       "0xf45f5319d88e7ac7"
      ]
@@ -1119,10 +1119,10 @@
    ]
   },
   {
-   "name": "Rubis d'argent",
+   "name": "Silver Rupees",
    "zones": [
     {
-     "name": "Caverne Polaire",
+     "name": "Ice Cavern",
      "keys": [
       "0x2d106890d9d01132",
       "0x5af593e74aea3040",
@@ -1137,7 +1137,7 @@
      ]
     },
     {
-     "name": "Intérieur du château de Ganondorf",
+     "name": "Inside Ganondorf's Castle",
      "keys": [
       "0x0feb38734016a7b5",
       "0x17694182d88f582e",
@@ -1162,7 +1162,7 @@
      ]
     },
     {
-     "name": "Gymnase Gerudo",
+     "name": "Gerudo Proving Grounds",
      "keys": [
       "0x0d9ab445c687af84",
       "0x0e741bc26e2c0697",
@@ -1187,7 +1187,7 @@
      ]
     },
     {
-     "name": "Fond du puits",
+     "name": "Bottom of the Well",
      "keys": [
       "0x688ba7ae82f7d174",
       "0x7e5292413b721c0a",
@@ -1197,7 +1197,7 @@
      ]
     },
     {
-     "name": "Temple de l'Esprit",
+     "name": "Spirit Temple",
      "keys": [
       "0x02f8a8f3bf0abf64",
       "0x0f6a8ef57d0bbd4f",
@@ -1217,7 +1217,7 @@
      ]
     },
     {
-     "name": "Temple de l'Ombre",
+     "name": "Shadow Temple",
      "keys": [
       "0x1fcdf4e539750d87",
       "0x63889e3987a9150a",
@@ -1241,7 +1241,7 @@
  ],
  "summary": [
   {
-   "title": "Quarts de cœur ramassés",
+   "title": "Heart Pieces collected",
    "terms": [
     {
      "hash": "0xfbe01da1",
