@@ -106,25 +106,19 @@ constexpr std::array<Field, 36> Places{{
     {0x2e975eed, "Zora River", FieldKind::Flag},
 }};
 
-constexpr std::array<Field, 4> DungeonInsideTheDekuTree{{
+constexpr std::array<Field, 2> DungeonInsideTheDekuTree{{
     {0x89787395, "Carte", FieldKind::Flag},
     {0x06c51ff2, "Boussole", FieldKind::Flag},
-    {0xf6995cee, "Clé du boss", FieldKind::Flag},
-    {0x0914ba07, "Petites clés", FieldKind::Number},
 }};
 
-constexpr std::array<Field, 4> DungeonDodongoCavern{{
+constexpr std::array<Field, 2> DungeonDodongoCavern{{
     {0xa52c3a19, "Carte", FieldKind::Flag},
     {0x8b93edf9, "Boussole", FieldKind::Flag},
-    {0xfaabc084, "Clé du boss", FieldKind::Flag},
-    {0x3fdbc3d0, "Petites clés", FieldKind::Number},
 }};
 
-constexpr std::array<Field, 4> DungeonInsideJabuJabuBelly{{
+constexpr std::array<Field, 2> DungeonInsideJabuJabuBelly{{
     {0xfcadd210, "Carte", FieldKind::Flag},
     {0x9a2218db, "Boussole", FieldKind::Flag},
-    {0x656bd5ee, "Clé du boss", FieldKind::Flag},
-    {0x1470a816, "Petites clés", FieldKind::Number},
 }};
 
 constexpr std::array<Field, 4> DungeonForestTemple{{
@@ -162,46 +156,93 @@ constexpr std::array<Field, 4> DungeonSpiritTemple{{
     {0x79eeec8e, "Petites clés", FieldKind::Number},
 }};
 
-constexpr std::array<Field, 4> DungeonBottomOfTheWell{{
+constexpr std::array<Field, 3> DungeonBottomOfTheWell{{
     {0x77c47ec9, "Carte", FieldKind::Flag},
     {0x9d6efaac, "Boussole", FieldKind::Flag},
-    {0x9402715c, "Clé du boss", FieldKind::Flag},
     {0x7dd79d10, "Petites clés", FieldKind::Number},
 }};
 
-constexpr std::array<Field, 4> DungeonIceCavern{{
+constexpr std::array<Field, 2> DungeonIceCavern{{
     {0x322f2a94, "Carte", FieldKind::Flag},
     {0xea1846e6, "Boussole", FieldKind::Flag},
-    {0x275f4512, "Clé du boss", FieldKind::Flag},
-    {0xfa5d133d, "Petites clés", FieldKind::Number},
 }};
 
-constexpr std::array<Field, 4> DungeonGerudoTrainingGround{{
-    {0x4b36041e, "Carte", FieldKind::Flag},
-    {0x3d9a2750, "Boussole", FieldKind::Flag},
-    {0x6d155841, "Clé du boss", FieldKind::Flag},
+constexpr std::array<Field, 1> DungeonGerudoTrainingGround{{
     {0xea9786f5, "Petites clés", FieldKind::Number},
 }};
 
-constexpr std::array<Field, 4> DungeonInsideGanonCastle{{
-    {0x9bbc0c4a, "Carte", FieldKind::Flag},
-    {0xc4d4734e, "Boussole", FieldKind::Flag},
+constexpr std::array<Field, 2> DungeonInsideGanonCastle{{
     {0x2fd59293, "Clé du boss", FieldKind::Flag},
     {0xfbfd2910, "Petites clés", FieldKind::Number},
 }};
 
-constexpr std::array<Field, 4> DungeonGerudoFortress{{
-    {0xbcaad6ce, "Carte", FieldKind::Flag},
-    {0x5eb80679, "Boussole", FieldKind::Flag},
-    {0x95fbcb7c, "Clé du boss", FieldKind::Flag},
+constexpr std::array<Field, 1> DungeonGerudoFortress{{
     {0x3a28b6a4, "Petites clés", FieldKind::Number},
 }};
 
-constexpr std::array<Field, 4> DungeonFinalBattleField{{
-    {0xb3b65c1a, "Carte", FieldKind::Flag},
-    {0x874493ce, "Boussole", FieldKind::Flag},
-    {0x6d0fea11, "Clé du boss", FieldKind::Flag},
-    {0xa04bfd48, "Petites clés", FieldKind::Number},
+constexpr std::array<Field, 0> DungeonFinalBattleField{{
+
+}};
+
+constexpr std::array<u64, 3> TokensBottomOfTheWell{0x35fb354fac262d36ULL, 0x6789388e9fb9c92cULL, 0xa8d6182a5c956e16ULL};
+constexpr std::array<u64, 2> TokensDeathMountainCrater{0x58c75badf059ca54ULL, 0xfcd7f04dcf755e8eULL};
+constexpr std::array<u64, 4> TokensDeathMountainTrail{0x04e03ac27985e328ULL, 0x0b8e43abfa0b5f86ULL, 0xf1d32c06612da232ULL, 0xf5359b24fc86ac22ULL};
+constexpr std::array<u64, 3> TokensDesertColossus{0x0341f2c03598c861ULL, 0x9ae3d0ac392e6cdaULL, 0xd0f7e5ffa76ba288ULL};
+constexpr std::array<u64, 5> TokensDodongoCavern{0x0d53e429a1ef383dULL, 0x10434342a3917ebdULL, 0x3f5b150f16d84603ULL, 0x758ce7b4868447fbULL, 0xbdfe13c37f356829ULL};
+constexpr std::array<u64, 5> TokensFireTemple{0x4d1b7e35ca0c6484ULL, 0x5e3ae6a7cf3ac292ULL, 0x7f498ada1c2e9c7aULL, 0xb0f77b17cfb37458ULL, 0xcc175a90e0014905ULL};
+constexpr std::array<u64, 5> TokensForestTemple{0x1bf5f0176ef03bdaULL, 0x2aa39f00aaa2d331ULL, 0x984021bc20419ebeULL, 0x99ca89963485df11ULL, 0xf46b1710ed0620d1ULL};
+constexpr std::array<u64, 1> TokensGanonCastle{0x4e13cc311cd04df4ULL};
+constexpr std::array<u64, 2> TokensGerudoFortress{0x81ed4ed76699e3d8ULL, 0xb4ece769e6f3a206ULL};
+constexpr std::array<u64, 4> TokensGerudoValley{0x738f5746cc517702ULL, 0xa017ce09904c2dceULL, 0xbc85efca2b222cd9ULL, 0xd3d86d3d6988ed8cULL};
+constexpr std::array<u64, 2> TokensGoronCity{0x07e6e21142cc54dbULL, 0xfbbc2d490276c68eULL};
+constexpr std::array<u64, 2> TokensGraveyard{0x032f42f523be6425ULL, 0xe91f6be796358ffcULL};
+constexpr std::array<u64, 1> TokensHountedWasteland{0xceed596f17934971ULL};
+constexpr std::array<u64, 2> TokensHyruleCastle{0x22c0f7dff5ebb86dULL, 0x7f28485fa5d3688fULL};
+constexpr std::array<u64, 11> TokensHyruleField{0x04be4a8ff29f2099ULL, 0x0af4d6f063d3ae9fULL, 0x1e38e8d23596eecfULL, 0x25e6072d4df023b3ULL, 0x61576befd16c499aULL, 0x6689bdebc95368ebULL, 0x781e0de8eed42373ULL, 0x7d8ec14bdd1f6341ULL, 0xa6a4e87da18fa678ULL, 0xc1858a4fcd84a28eULL, 0xdc8113831c56b194ULL};
+constexpr std::array<u64, 3> TokensIceCavern{0x165fc0bc0aca1f6cULL, 0x63701a2cf70b201cULL, 0xcdb49f5d0a67fcf6ULL};
+constexpr std::array<u64, 4> TokensInsideJabuJabuBelly{0x9c95fd41b89c058aULL, 0x9fc92497f014dbd5ULL, 0xc03f282ff60942b6ULL, 0xddd260afb6f2989aULL};
+constexpr std::array<u64, 4> TokensInsideTheDekuTree{0xbce05898ce61f1c0ULL, 0xdf73f3739cef466bULL, 0xf2e27d6a27026acfULL, 0xfad8931a0011e1d4ULL};
+constexpr std::array<u64, 6> TokensKakarikoVillage{0x2df265292516bdf0ULL, 0x6a8d9b2373d08fcbULL, 0xa1632e322c612b97ULL, 0xc3c68d0ac4b85831ULL, 0xd1cef51cf294fb86ULL, 0xd4883a16973b1d06ULL};
+constexpr std::array<u64, 3> TokensKokiriForest{0x62c340f0b876c195ULL, 0x858f5000ad57b2ccULL, 0xecdc46b409ed7d38ULL};
+constexpr std::array<u64, 3> TokensLostWood{0x3c2b585ac5c0443eULL, 0x8186bcb07d6c2cf9ULL, 0xf6fa6ef0ca152948ULL};
+constexpr std::array<u64, 1> TokensMarket{0x7c1a05315f83c34dULL};
+constexpr std::array<u64, 1> TokensSacredForestMeadow{0xc8db3346f78ea31bULL};
+constexpr std::array<u64, 5> TokensShadowTemple{0x7a74bc651f9fe024ULL, 0x8e87908cb035e950ULL, 0xd23a7a2c9eced9ceULL, 0xd7ffbe169189e50dULL, 0xeafe60e592e9a3fbULL};
+constexpr std::array<u64, 5> TokensSpiritTemple{0x4696b2730de0516cULL, 0x70b0fca66ca4808aULL, 0x8c8bb95471d20d02ULL, 0x9222e742b73d3d2cULL, 0xb3d9f353599eea53ULL};
+constexpr std::array<u64, 5> TokensWaterTemple{0x02974596f92cf377ULL, 0x3d0de5adaeb73cc9ULL, 0xa0973706f6415ecdULL, 0xd731ea6a04d0fd01ULL, 0xe03a2965df9f7b30ULL};
+constexpr std::array<u64, 1> TokensZoraDomain{0x853b892663c0215dULL};
+constexpr std::array<u64, 3> TokensZoraFountain{0x63446d12663daa83ULL, 0x845ba51dc18c855eULL, 0xf0dac245e2fc448eULL};
+constexpr std::array<u64, 4> TokensZoraRiver{0x78ae4fd90b3cfaaaULL, 0x8325fea55edfbe97ULL, 0x97824c2ffeaa877cULL, 0xabad0e9f0d471156ULL};
+constexpr std::array<Zone, 29> OcarinaZones{{
+    {"Arbre Mojo", TokensInsideTheDekuTree},
+    {"Bois Perdus", TokensLostWood},
+    {"Bosquet sacré", TokensSacredForestMeadow},
+    {"Caverne Dodongo", TokensDodongoCavern},
+    {"Caverne de Glace", TokensIceCavern},
+    {"Château de Ganon", TokensGanonCastle},
+    {"Château d'Hyrule", TokensHyruleCastle},
+    {"Cimetière", TokensGraveyard},
+    {"Cocorico", TokensKakarikoVillage},
+    {"Colosse du Désert", TokensDesertColossus},
+    {"Cratère du Péril", TokensDeathMountainCrater},
+    {"Domaine Zora", TokensZoraDomain},
+    {"Désert hanté", TokensHountedWasteland},
+    {"Fontaine Zora", TokensZoraFountain},
+    {"Forteresse Gerudo", TokensGerudoFortress},
+    {"Forêt Kokiri", TokensKokiriForest},
+    {"Marché", TokensMarket},
+    {"Plaine d'Hyrule", TokensHyruleField},
+    {"Puits", TokensBottomOfTheWell},
+    {"Rivière Zora", TokensZoraRiver},
+    {"Sentier du Péril", TokensDeathMountainTrail},
+    {"Temple de l'Eau", TokensWaterTemple},
+    {"Temple de l'Esprit", TokensSpiritTemple},
+    {"Temple de l'Ombre", TokensShadowTemple},
+    {"Temple de la Forêt", TokensForestTemple},
+    {"Temple du Feu", TokensFireTemple},
+    {"Vallée Gerudo", TokensGerudoValley},
+    {"Ventre de Jabu-Jabu", TokensInsideJabuJabuBelly},
+    {"Village Goron", TokensGoronCity},
 }};
 
 constexpr std::array<View, 21> OcarinaViews{{
@@ -212,6 +253,7 @@ constexpr std::array<View, 21> OcarinaViews{{
     {"Chansons", Songs, true},
     {"Quêtes", Quest, true},
     {"Lieux visités", Places, true},
+    {"Skulltulas par zone", {}, false},
     {"Arbre Mojo", DungeonInsideTheDekuTree, true},
     {"Caverne Dodongo", DungeonDodongoCavern, true},
     {"Ventre de Jabu-Jabu", DungeonInsideJabuJabuBelly, true},
