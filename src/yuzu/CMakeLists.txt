@@ -248,6 +248,7 @@ add_executable(yuzu
     configuration/system/profile_avatar_dialog.h configuration/system/profile_avatar_dialog.cpp
     configuration/addon/mod_select_dialog.h configuration/addon/mod_select_dialog.cpp configuration/addon/mod_select_dialog.ui
 
+    render/adventure_notes.h render/adventure_notes.cpp
     render/performance_overlay.h render/performance_overlay.cpp render/performance_overlay.ui
     updater/update_dialog.h updater/update_dialog.cpp updater/update_dialog.ui
     game/common.h
