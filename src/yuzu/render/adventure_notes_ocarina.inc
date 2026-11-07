@@ -216,7 +216,7 @@ constexpr std::array<Zone, 29> OcarinaZones{{
     {"Sanctuaire de la Forêt", TokensSacredForestMeadow},
     {"Caverne Dodongo", TokensDodongoCavern},
     {"Caverne Polaire", TokensIceCavern},
-    {"Intérieur du château de Ganondorf", TokensGanonCastle},
+    {"Château de Ganondorf", TokensGanonCastle},
     {"Château d'Hyrule", TokensHyruleCastle},
     {"Cimetière", TokensGraveyard},
     {"Village de Cocorico", TokensKakarikoVillage},
