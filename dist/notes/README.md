@@ -1,7 +1,9 @@
 # Adventure notes modules
 
-A module adds a game to the Adventure notes panel. Copy it to `notes/<PROGRAM ID>.json` in the
-user folder, with the program ID in 16 upper-case hex digits. No rebuild is needed.
+A module adds a game to the Adventure notes panel. Open the panel in a game and press
+"Create a module for this game": it writes `notes/<PROGRAM ID>.json` in the user folder and opens
+the folder. Edit the file: the panel reloads it when you save, and shows any JSON error with its
+line. No rebuild is needed. A `notes` folder next to the program is read when the user has none.
 
 - `save`: `folder` in the save directory, `file` in each slot folder, `layout`. Only
   `gamedata-table` is read so far: hash and value pairs from 0x28.

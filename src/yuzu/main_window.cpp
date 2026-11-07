@@ -3445,8 +3445,7 @@ bool MainWindow::ConfirmShutdownGame() {
 void MainWindow::OnLoadComplete() {
     loading_screen->OnLoadComplete();
 
-    ui->action_Show_Adventure_Notes->setEnabled(
-        AdventureNotes::Supports(QtCommon::system->GetApplicationProcessProgramID()));
+    ui->action_Show_Adventure_Notes->setEnabled(true);
 
     perf_overlay = new PerformanceOverlay(this);
     perf_overlay->setVisible(ui->action_Show_Performance_Overlay->isChecked());

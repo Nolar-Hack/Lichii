@@ -17,12 +17,15 @@
 #include <fmt/format.h>
 
 #include <QComboBox>
+#include <QCoreApplication>
+#include <QDesktopServices>
 #include <QFile>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
 #include <QLabel>
 #include <QLinearGradient>
 #include <QMouseEvent>
@@ -35,6 +38,7 @@
 #include <QTabBar>
 #include <QTimer>
 #include <QToolButton>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QWindow>
 
@@ -104,9 +108,21 @@ struct GameNotes {
 };
 
 namespace {
-fs::path ModulePath(u64 program_id) {
+fs::path UserModule(u64 program_id) {
     return Common::FS::GetEdenPath(Common::FS::EdenPath::EdenDir) / "notes" /
            fmt::format("{:016X}.json", program_id);
+}
+
+/// The user's module, else the one shipped next to the program.
+fs::path FindModule(u64 program_id) {
+    std::error_code ec;
+    const fs::path user = UserModule(program_id);
+    if (fs::exists(user, ec)) {
+        return user;
+    }
+    const fs::path shipped = fs::path{QCoreApplication::applicationDirPath().toStdString()} /
+                             "notes" / user.filename();
+    return fs::exists(shipped, ec) ? shipped : user;
 }
 
 u64 ParseHex(const QJsonValue& value) {
@@ -120,14 +136,22 @@ FieldKind ParseKind(const QString& kind) {
     return kind == QStringLiteral("number") ? FieldKind::Number : FieldKind::Count;
 }
 
-std::unique_ptr<GameNotes> LoadModule(u64 program_id) {
-    QFile file{QString::fromStdString(ModulePath(program_id).string())};
+std::unique_ptr<GameNotes> LoadModule(const fs::path& path, QString& error) {
+    QFile file{QString::fromStdString(path.string())};
     if (!file.open(QIODevice::ReadOnly)) {
         return nullptr;
     }
-    const QJsonObject root = QJsonDocument::fromJson(file.readAll()).object();
+    QJsonParseError parse;
+    const QByteArray text = file.readAll();
+    const QJsonObject root = QJsonDocument::fromJson(text, &parse).object();
+    if (parse.error != QJsonParseError::NoError) {
+        const int line = static_cast<int>(text.left(parse.offset).count('\n')) + 1;
+        error = QStringLiteral("Module error, line %1: %2").arg(line).arg(parse.errorString());
+        return nullptr;
+    }
     const QJsonObject save = root[QStringLiteral("save")].toObject();
     if (save[QStringLiteral("layout")].toString() != QStringLiteral("gamedata-table")) {
+        error = QStringLiteral("Module error: save layout must be gamedata-table");
         return nullptr;
     }
     auto game = std::make_unique<GameNotes>();
@@ -255,15 +279,10 @@ private:
 };
 } // Anonymous namespace
 
-bool AdventureNotes::Supports(u64 program_id) {
-    std::error_code ec;
-    return fs::exists(ModulePath(program_id), ec);
-}
-
 AdventureNotes::~AdventureNotes() = default;
 
-AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
-    : QWidget(parent), game{LoadModule(program_id)} {
+AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id_)
+    : QWidget(parent), program_id{program_id_} {
     setAttribute(Qt::WA_TranslucentBackground);
     setWindowFlags(Qt::FramelessWindowHint | Qt::Tool);
     setStyleSheet(QStringLiteral(
@@ -313,17 +332,12 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
     tabs = new QTabBar(this);
     tabs->setDrawBase(false);
     tabs->setExpanding(false);
-    tabs->addTab(QStringLiteral("Global"));
-    if (game) {
-        QStringList names;
-        for (const View& view : game->views) {
-            if (!names.contains(view.tab)) {
-                names.push_back(view.tab);
-                tabs->addTab(view.tab);
-            }
-        }
-    }
     views = new QComboBox(this);
+
+    create = new QToolButton(this);
+    create->setText(tr("Create a module for this game"));
+    create->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    connect(create, &QToolButton::clicked, this, &AdventureNotes::CreateModule);
 
     body = new QWidget;
     rows = new QGridLayout(body);
@@ -344,6 +358,7 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
     layout->addWidget(tabs);
     layout->addWidget(views);
     layout->addWidget(scroll, 1);
+    layout->addWidget(create);
     grip = new QLabel(QStringLiteral("⌟"), this);
     grip->setObjectName(QStringLiteral("subtitle"));
     grip->setCursor(Qt::SizeFDiagCursor);
@@ -365,8 +380,71 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
     });
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &AdventureNotes::Refresh);
-    timer->start(3000);
+    timer->start(1000);
+    LoadGame();
+}
+
+void AdventureNotes::LoadGame() {
+    const fs::path path = FindModule(program_id);
+    std::error_code ec;
+    module_time = fs::last_write_time(path, ec);
+    QString error;
+    game = LoadModule(path, error);
+    const QSignalBlocker blocker{tabs};
+    while (tabs->count() > 0) {
+        tabs->removeTab(0);
+    }
+    create->setVisible(!game && !fs::exists(path, ec));
+    if (!game) {
+        ShowMessage(error.isEmpty() ? tr("No module for this game yet") : error);
+        tabs->setVisible(false);
+        views->setVisible(false);
+        return;
+    }
+    tabs->setVisible(true);
+    tabs->addTab(QStringLiteral("Global"));
+    QStringList names;
+    for (const View& view : game->views) {
+        if (!view.tab.isEmpty() && !names.contains(view.tab)) {
+            names.push_back(view.tab);
+            tabs->addTab(view.tab);
+        }
+    }
     FillViews();
+}
+
+void AdventureNotes::ShowMessage(const QString& text) {
+    subtitle->setText(QStringLiteral("ADVENTURE NOTES"));
+    header->setText(QString{});
+    auto* label = new QLabel(text, body);
+    label->setWordWrap(true);
+    rows->addWidget(label, 0, 0, 1, 2);
+    FitContent();
+}
+
+void AdventureNotes::CreateModule() {
+    // A commented example the user fills in: the title and a first stat are all it takes.
+    const fs::path path = UserModule(program_id);
+    std::error_code ec;
+    fs::create_directories(path.parent_path(), ec);
+    std::ofstream file{path};
+    file << fmt::format(R"({{
+ "title": "My game",
+ "save": {{ "folder": "{:016X}", "file": "progress.sav", "layout": "gamedata-table" }},
+ "play_time": "0x00000000",
+ "views": [
+  {{ "name": "Summary", "tab": "Stats", "fields": [
+   {{ "title": "Example", "hash": "0x00000000", "kind": "count" }}
+  ] }}
+ ],
+ "collections": []
+}}
+)",
+                        program_id);
+    file.close();
+    QDesktopServices::openUrl(
+        QUrl::fromLocalFile(QString::fromStdString(path.parent_path().string())));
+    LoadGame();
 }
 
 void AdventureNotes::FillViews() {
@@ -399,6 +477,13 @@ void AdventureNotes::FitContent() {
 }
 
 void AdventureNotes::Refresh() {
+    // A module edited while the panel is open shows at once.
+    std::error_code ec;
+    const auto time = fs::last_write_time(FindModule(program_id), ec);
+    if (!ec && time != module_time) {
+        LoadGame();
+        return;
+    }
     SCOPE_EXIT {
         FitContent();
     };
@@ -413,14 +498,17 @@ void AdventureNotes::Refresh() {
     rows->setHorizontalSpacing(12);
     rows->setVerticalSpacing(5);
     rows->setColumnStretch(0, 1);
-    const auto path = game ? NewestSave(*game) : std::nullopt;
+    if (!game) {
+        return;
+    }
+    const auto path = NewestSave(*game);
     if (!path) {
-        header->setText(tr("No save found"));
+        ShowMessage(tr("No save found"));
         return;
     }
     const SaveTable save{*path};
     if (!save.Valid()) {
-        header->setText(tr("Unreadable save"));
+        ShowMessage(tr("Unreadable save"));
         return;
     }
     const s64 seconds = save.Read(game->play_time_hash, FieldKind::Count);
