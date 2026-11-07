@@ -11,6 +11,7 @@ add_executable(tests
     video_core/unswizzle_workers.cpp
     video_core/aftermath_dump.cpp
     video_core/frame_dump_schedule.cpp
+    video_core/spirv_inline_control.cpp
     video_core/gpu_timestamp.cpp
     video_core/unbacked_image_policy.cpp
     core/nx2_streamplay.cpp
