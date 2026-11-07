@@ -24,8 +24,12 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
+#include <QLinearGradient>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPen>
+#include <QProgressBar>
+#include <QScrollArea>
 #include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -256,21 +260,44 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
     setAttribute(Qt::WA_TranslucentBackground);
     setWindowFlags(Qt::FramelessWindowHint | Qt::Tool);
     setStyleSheet(QStringLiteral(
-        "QLabel { color: #e8e8e0; font-size: 11px; background: transparent; }"
-        "QComboBox { color: #ffffff; background: rgba(255,255,255,18); border: none; "
-        "border-radius: 4px; padding: 1px 6px; font-size: 11px; }"
-        "QComboBox QAbstractItemView { color: #ffffff; background: #1c201c; "
-        "selection-background-color: #3d5a2a; }"
-        "QToolButton { color: #c8c8c0; background: transparent; border: none; font-size: 12px; }"));
+        "QLabel { color: #e9e6da; font-size: 12px; background: transparent; }"
+        "QLabel#header { color: #f4d27a; font-size: 19px; font-weight: 600; }"
+        "QLabel#subtitle { color: #8f9a86; font-size: 10px; letter-spacing: 1px; }"
+        "QLabel#value { color: #ffffff; font-weight: 600; }"
+        "QComboBox { color: #f1efe6; background: rgba(255,255,255,16); border: 1px solid "
+        "rgba(255,255,255,26); border-radius: 7px; padding: 4px 9px; font-size: 12px; }"
+        "QComboBox::drop-down { border: none; width: 16px; }"
+        "QComboBox QAbstractItemView { color: #f1efe6; background: #171b17; border: 1px solid "
+        "#3a4436; selection-background-color: #4c6a35; outline: none; }"
+        "QProgressBar { background: rgba(255,255,255,20); border: none; border-radius: 2px; "
+        "max-height: 4px; min-height: 4px; }"
+        "QProgressBar::chunk { background: #9fd36a; border-radius: 2px; }"
+        "QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; border: none; }"
+        "QScrollBar:vertical { background: transparent; width: 6px; margin: 0; }"
+        "QScrollBar::handle:vertical { background: rgba(255,255,255,50); border-radius: 3px; "
+        "min-height: 20px; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+        "QToolButton { color: #aeb5a4; background: transparent; border: none; font-size: 15px; "
+        "padding: 0 4px; }"
+        "QToolButton:hover { color: #ffffff; }"));
 
+    subtitle = new QLabel(this);
+    subtitle->setObjectName(QStringLiteral("subtitle"));
+    subtitle->installEventFilter(this);
     header = new QLabel(this);
+    header->setObjectName(QStringLiteral("header"));
     header->installEventFilter(this);
     collapse = new QToolButton(this);
     collapse->setText(QStringLiteral("–"));
+    auto* titles = new QVBoxLayout;
+    titles->setContentsMargins(0, 0, 0, 0);
+    titles->setSpacing(0);
+    titles->addWidget(subtitle);
+    titles->addWidget(header);
     auto* top = new QHBoxLayout;
     top->setContentsMargins(0, 0, 0, 0);
-    top->addWidget(header, 1);
-    top->addWidget(collapse);
+    top->addLayout(titles, 1);
+    top->addWidget(collapse, 0, Qt::AlignTop);
 
     views = new QComboBox(this);
     views->addItem(QStringLiteral("Global"));
@@ -280,26 +307,34 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
         }
     }
 
-    body = new QWidget(this);
+    body = new QWidget;
     rows = new QGridLayout(body);
-    rows->setContentsMargins(4, 2, 4, 0);
-    rows->setHorizontalSpacing(14);
-    rows->setVerticalSpacing(1);
+    rows->setContentsMargins(2, 4, 8, 2);
+    rows->setHorizontalSpacing(12);
+    rows->setVerticalSpacing(5);
+    rows->setColumnStretch(0, 1);
+    scroll = new QScrollArea(this);
+    scroll->setWidget(body);
+    scroll->setWidgetResizable(true);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setMaximumHeight(330);
 
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(10, 6, 8, 8);
-    layout->setSpacing(3);
+    layout->setContentsMargins(14, 11, 10, 12);
+    layout->setSpacing(7);
     layout->addLayout(top);
     layout->addWidget(views);
-    layout->addWidget(body);
-    layout->setSizeConstraint(QLayout::SetFixedSize);
+    layout->addWidget(scroll);
+    setFixedWidth(286);
 
     connect(views, &QComboBox::currentIndexChanged, this, &AdventureNotes::Refresh);
     connect(collapse, &QToolButton::clicked, this, [this] {
-        const bool visible = !body->isVisible();
-        body->setVisible(visible);
+        const bool visible = !scroll->isVisible();
+        scroll->setVisible(visible);
         views->setVisible(visible);
         collapse->setText(visible ? QStringLiteral("–") : QStringLiteral("+"));
+        adjustSize();
     });
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &AdventureNotes::Refresh);
@@ -323,17 +358,30 @@ void AdventureNotes::Refresh() {
         return;
     }
     const s64 seconds = save.Read(game->play_time_hash, FieldKind::Count);
-    header->setText(QStringLiteral("<b>%1 h %2</b> &nbsp;<span style='color:#a8a8a0'>%3</span>")
+    subtitle->setText(QStringLiteral("%1  ·  %2")
+                          .arg(game->title.toUpper().left(26))
+                          .arg(QString::fromStdString(path->parent_path().filename().string())));
+    header->setText(QStringLiteral("%1 h %2")
                         .arg(seconds / 3600)
-                        .arg((seconds % 3600) / 60, 2, 10, QLatin1Char('0'))
-                        .arg(QString::fromStdString(path->parent_path().filename().string())));
+                        .arg((seconds % 3600) / 60, 2, 10, QLatin1Char('0')));
     int row = 0;
     const auto add = [this, &row](const QString& title, const QString& value) {
         auto* name = new QLabel(title, body);
+        name->setWordWrap(true);
         auto* text = new QLabel(value, body);
-        text->setAlignment(Qt::AlignRight);
+        text->setObjectName(QStringLiteral("value"));
+        text->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         rows->addWidget(name, row, 0);
         rows->addWidget(text, row, 1);
+        ++row;
+    };
+    const auto progress = [this, &row, &add](const QString& title, int done, int total) {
+        add(title, QStringLiteral("%1 / %2").arg(done).arg(total));
+        auto* bar = new QProgressBar(body);
+        bar->setRange(0, std::max(total, 1));
+        bar->setValue(done);
+        bar->setTextVisible(false);
+        rows->addWidget(bar, row, 0, 1, 2);
         ++row;
     };
     const int selected = views->currentIndex() - 1;
@@ -350,7 +398,7 @@ void AdventureNotes::Refresh() {
                     done += save.Read(field.hash, field.kind) != 0 ? 1 : 0;
                 }
             }
-            add(view.name, QStringLiteral("<b>%1 / %2</b>").arg(done).arg(total));
+            progress(view.name, done, total);
         }
         for (const Collection& collection : game->collections) {
             int found = 0, total = 0;
@@ -358,8 +406,7 @@ void AdventureNotes::Refresh() {
                 found += save.CountKeys(zone.keys);
                 total += static_cast<int>(zone.keys.size());
             }
-            add(collection.name,
-                QStringLiteral("<b>%1 / %2</b>").arg(found).arg(total));
+            progress(collection.name, found, total);
         }
         for (const Summary& summary : game->summaries) {
             s64 value = 0;
@@ -376,7 +423,7 @@ void AdventureNotes::Refresh() {
                 }
                 value += part * (term.hash != 0 || term.collection >= 0 ? term.scale : 1);
             }
-            add(summary.title, QStringLiteral("<b>%1</b>").arg(value));
+            add(summary.title, QString::number(value));
         }
         return;
     }
@@ -385,29 +432,24 @@ void AdventureNotes::Refresh() {
         for (const Zone& zone : game->collections[static_cast<size_t>(view.collection)].zones) {
             const int found = save.CountKeys(zone.keys);
             const int total = static_cast<int>(zone.keys.size());
-            const char* const color = found == total ? "#9fd36a" : "#ffffff";
-            add(zone.name,
-                QStringLiteral("<b style='color:%1'>%2 / %3</b>")
-                    .arg(QString::fromLatin1(color))
-                    .arg(found)
-                    .arg(total));
+            progress(zone.name, found, total);
         }
         return;
     }
     for (const Field& field : view.fields) {
         const s64 value = save.Read(field.hash, field.kind);
-        const QString shown = field.kind == FieldKind::Flag
-                                  ? (value != 0 ? QStringLiteral("<b style='color:#9fd36a'>oui</b>")
-                                                : QStringLiteral("<span style='color:#d08a6a'>non</span>"))
-                                  : QStringLiteral("<b>%1</b>").arg(value);
+        const QString shown =
+            field.kind == FieldKind::Flag
+                ? (value != 0 ? QStringLiteral("<span style='color:#9fd36a'>✓</span>")
+                              : QStringLiteral("<span style='color:#6d7566'>—</span>"))
+                : QString::number(value);
         add(field.title, shown);
     }
     for (const Collection& collection : game->collections) {
         for (const Zone& zone : collection.zones) {
             if (zone.name == view.name) {
-                add(collection.name, QStringLiteral("<b>%1 / %2</b>")
-                                                            .arg(save.CountKeys(zone.keys))
-                                                            .arg(zone.keys.size()));
+                progress(collection.name, save.CountKeys(zone.keys),
+                         static_cast<int>(zone.keys.size()));
             }
         }
     }
@@ -416,9 +458,12 @@ void AdventureNotes::Refresh() {
 void AdventureNotes::paintEvent(QPaintEvent*) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
-    painter.setBrush(QColor{16, 18, 16, 170});
-    painter.setPen(Qt::NoPen);
-    painter.drawRoundedRect(rect(), 8.0, 8.0);
+    QLinearGradient gradient{0, 0, 0, static_cast<qreal>(height())};
+    gradient.setColorAt(0.0, QColor{30, 36, 28, 228});
+    gradient.setColorAt(1.0, QColor{14, 17, 14, 228});
+    painter.setBrush(gradient);
+    painter.setPen(QPen{QColor{255, 255, 255, 26}, 1.0});
+    painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 12.0, 12.0);
 }
 
 void AdventureNotes::StartDrag(QPoint position) {
@@ -443,10 +488,10 @@ void AdventureNotes::mouseMoveEvent(QMouseEvent* event) {
 }
 
 bool AdventureNotes::eventFilter(QObject* object, QEvent* event) {
-    if (object == header && event->type() == QEvent::MouseButtonPress) {
+    if ((object == header || object == subtitle) && event->type() == QEvent::MouseButtonPress) {
         const auto* mouse = static_cast<QMouseEvent*>(event);
         if (mouse->button() == Qt::LeftButton) {
-            StartDrag(header->mapTo(this, mouse->pos()));
+            StartDrag(static_cast<QWidget*>(object)->mapTo(this, mouse->pos()));
             return true;
         }
     }
