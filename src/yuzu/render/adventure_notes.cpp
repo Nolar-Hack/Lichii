@@ -379,7 +379,7 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id_)
         FitContent();
     });
     timer = new QTimer(this);
-    connect(timer, &QTimer::timeout, this, &AdventureNotes::Refresh);
+    connect(timer, &QTimer::timeout, this, &AdventureNotes::CheckFiles);
     timer->start(1000);
     LoadGame();
 }
@@ -411,6 +411,26 @@ void AdventureNotes::LoadGame() {
         }
     }
     FillViews();
+}
+
+void AdventureNotes::CheckFiles() {
+    // Only what changed is shown again: the list keeps its scroll position otherwise.
+    std::error_code ec;
+    const auto time = fs::last_write_time(FindModule(program_id), ec);
+    if (!ec && time != module_time) {
+        LoadGame();
+        return;
+    }
+    if (!game) {
+        return;
+    }
+    if (const auto path = NewestSave(*game)) {
+        const auto saved = fs::last_write_time(*path, ec);
+        if (!ec && saved != save_time) {
+            save_time = saved;
+            Refresh();
+        }
+    }
 }
 
 void AdventureNotes::ShowMessage(const QString& text) {
@@ -477,13 +497,6 @@ void AdventureNotes::FitContent() {
 }
 
 void AdventureNotes::Refresh() {
-    // A module edited while the panel is open shows at once.
-    std::error_code ec;
-    const auto time = fs::last_write_time(FindModule(program_id), ec);
-    if (!ec && time != module_time) {
-        LoadGame();
-        return;
-    }
     SCOPE_EXIT {
         FitContent();
     };
