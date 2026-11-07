@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <array>
+#include <memory>
+#include <string>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -12,9 +14,15 @@
 #include <unordered_set>
 #include <vector>
 
+#include <fmt/format.h>
+
 #include <QComboBox>
+#include <QFile>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPainter>
@@ -39,58 +47,98 @@ enum class FieldKind : u8 {
 
 struct Field {
     u32 hash;
-    const char* title;
+    QString title;
     FieldKind kind;
 };
 
 struct View {
-    const char* name;
-    std::span<const Field> fields;
-    bool checklist;      ///< Counted in the Global view.
-    int collection = -1; ///< The Collection this view lists by zone, if any.
+    QString name;
+    std::vector<Field> fields;
+    bool checklist;
+    int collection = -1; ///< The collection this view lists by zone, if any.
 };
 
 /// A zone's collectibles, kept in the save as 64-bit actor keys once taken.
 struct Zone {
-    const char* name;
-    std::span<const u64> tokens;
+    QString name;
+    std::vector<u64> keys;
 };
 
-/// Collectibles of one kind, zone by zone.
 struct Collection {
-    const char* name;
-    std::span<const Zone> zones;
+    QString name;
+    std::vector<Zone> zones;
 };
-
-#include "render/adventure_notes_ocarina.inc"
-
-constexpr u32 OcarinaPlayTime = 0xce97845e;
 } // Anonymous namespace
 
-/// A game whose save the panel can read: hash + value tables at 0x28, as in progress.sav.
+/// A module: what to read in a game's save. The only layout so far is "gamedata-table".
 struct GameNotes {
-    u64 program_id;
-    const char* title;
-    const char* folder;    ///< Its folder in the save directory.
-    const char* save_file; ///< The file in each of its slot folders.
-    u32 play_time_hash;
-    std::span<const View> views;
-    std::span<const Collection> collections;
+    QString title;
+    std::string folder;
+    std::string save_file;
+    u32 play_time_hash = 0;
+    std::vector<View> views;
+    std::vector<Collection> collections;
 };
 
 namespace {
-constexpr std::array<GameNotes, 1> Games{{
-    {0x0400486024DEC000ULL, "The Legend of Zelda: Ocarina of Time", "0400486024DEC000",
-     "progress.sav", OcarinaPlayTime, OcarinaViews, OcarinaCollections},
-}};
+fs::path ModulePath(u64 program_id) {
+    return Common::FS::GetEdenPath(Common::FS::EdenPath::EdenDir) / "notes" /
+           fmt::format("{:016X}.json", program_id);
+}
 
-const GameNotes* FindGame(u64 program_id) {
-    for (const GameNotes& game : Games) {
-        if (game.program_id == program_id) {
-            return &game;
-        }
+u64 ParseHex(const QJsonValue& value) {
+    return value.toString().toULongLong(nullptr, 16);
+}
+
+FieldKind ParseKind(const QString& kind) {
+    if (kind == QStringLiteral("flag")) {
+        return FieldKind::Flag;
     }
-    return nullptr;
+    return kind == QStringLiteral("number") ? FieldKind::Number : FieldKind::Count;
+}
+
+std::unique_ptr<GameNotes> LoadModule(u64 program_id) {
+    QFile file{QString::fromStdString(ModulePath(program_id).string())};
+    if (!file.open(QIODevice::ReadOnly)) {
+        return nullptr;
+    }
+    const QJsonObject root = QJsonDocument::fromJson(file.readAll()).object();
+    const QJsonObject save = root[QStringLiteral("save")].toObject();
+    if (save[QStringLiteral("layout")].toString() != QStringLiteral("gamedata-table")) {
+        return nullptr;
+    }
+    auto game = std::make_unique<GameNotes>();
+    game->title = root[QStringLiteral("title")].toString();
+    game->folder = save[QStringLiteral("folder")].toString().toStdString();
+    game->save_file = save[QStringLiteral("file")].toString().toStdString();
+    game->play_time_hash = static_cast<u32>(ParseHex(root[QStringLiteral("play_time")]));
+    for (const QJsonValue& entry : root[QStringLiteral("views")].toArray()) {
+        const QJsonObject object = entry.toObject();
+        View view{object[QStringLiteral("name")].toString(), {},
+                  object[QStringLiteral("checklist")].toBool(),
+                  object[QStringLiteral("collection")].toInt(-1)};
+        for (const QJsonValue& item : object[QStringLiteral("fields")].toArray()) {
+            const QJsonObject field = item.toObject();
+            view.fields.push_back({static_cast<u32>(ParseHex(field[QStringLiteral("hash")])),
+                                   field[QStringLiteral("title")].toString(),
+                                   ParseKind(field[QStringLiteral("kind")].toString())});
+        }
+        game->views.push_back(std::move(view));
+    }
+    for (const QJsonValue& entry : root[QStringLiteral("collections")].toArray()) {
+        const QJsonObject object = entry.toObject();
+        Collection collection{object[QStringLiteral("name")].toString(), {}};
+        for (const QJsonValue& item : object[QStringLiteral("zones")].toArray()) {
+            const QJsonObject zone_object = item.toObject();
+            Zone zone{zone_object[QStringLiteral("name")].toString(), {}};
+            for (const QJsonValue& key : zone_object[QStringLiteral("keys")].toArray()) {
+                zone.keys.push_back(ParseHex(key));
+            }
+            collection.zones.push_back(std::move(zone));
+        }
+        game->collections.push_back(std::move(collection));
+    }
+    return game;
 }
 
 std::optional<fs::path> NewestSave(const GameNotes& game) {
@@ -133,7 +181,7 @@ public:
         }
     }
 
-    [[nodiscard]] int CountKeys(std::span<const u64> wanted) const {
+    [[nodiscard]] int CountKeys(const std::vector<u64>& wanted) const {
         return static_cast<int>(std::ranges::count_if(
             wanted, [this](u64 key) { return keys.contains(key); }));
     }
@@ -171,11 +219,14 @@ private:
 } // Anonymous namespace
 
 bool AdventureNotes::Supports(u64 program_id) {
-    return FindGame(program_id) != nullptr;
+    std::error_code ec;
+    return fs::exists(ModulePath(program_id), ec);
 }
 
+AdventureNotes::~AdventureNotes() = default;
+
 AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
-    : QWidget(parent), game{FindGame(program_id)} {
+    : QWidget(parent), game{LoadModule(program_id)} {
     setAttribute(Qt::WA_TranslucentBackground);
     setWindowFlags(Qt::FramelessWindowHint | Qt::Tool);
     setStyleSheet(QStringLiteral(
@@ -199,7 +250,7 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
     views->addItem(QStringLiteral("Global"));
     if (game) {
         for (const View& view : game->views) {
-            views->addItem(QString::fromUtf8(view.name));
+            views->addItem(view.name);
         }
     }
 
@@ -273,15 +324,15 @@ void AdventureNotes::Refresh() {
                     done += save.Read(field.hash, field.kind) != 0 ? 1 : 0;
                 }
             }
-            add(QString::fromUtf8(view.name), QStringLiteral("<b>%1 / %2</b>").arg(done).arg(total));
+            add(view.name, QStringLiteral("<b>%1 / %2</b>").arg(done).arg(total));
         }
         for (const Collection& collection : game->collections) {
             int found = 0, total = 0;
             for (const Zone& zone : collection.zones) {
-                found += save.CountKeys(zone.tokens);
-                total += static_cast<int>(zone.tokens.size());
+                found += save.CountKeys(zone.keys);
+                total += static_cast<int>(zone.keys.size());
             }
-            add(QString::fromUtf8(collection.name),
+            add(collection.name,
                 QStringLiteral("<b>%1 / %2</b>").arg(found).arg(total));
         }
         return;
@@ -289,10 +340,10 @@ void AdventureNotes::Refresh() {
     const View& view = game->views[static_cast<size_t>(selected)];
     if (view.collection >= 0) {
         for (const Zone& zone : game->collections[static_cast<size_t>(view.collection)].zones) {
-            const int found = save.CountKeys(zone.tokens);
-            const int total = static_cast<int>(zone.tokens.size());
+            const int found = save.CountKeys(zone.keys);
+            const int total = static_cast<int>(zone.keys.size());
             const char* const color = found == total ? "#9fd36a" : "#ffffff";
-            add(QString::fromUtf8(zone.name),
+            add(zone.name,
                 QStringLiteral("<b style='color:%1'>%2 / %3</b>")
                     .arg(QString::fromLatin1(color))
                     .arg(found)
@@ -306,14 +357,14 @@ void AdventureNotes::Refresh() {
                                   ? (value != 0 ? QStringLiteral("<b style='color:#9fd36a'>oui</b>")
                                                 : QStringLiteral("<span style='color:#d08a6a'>non</span>"))
                                   : QStringLiteral("<b>%1</b>").arg(value);
-        add(QString::fromUtf8(field.title), shown);
+        add(field.title, shown);
     }
     for (const Collection& collection : game->collections) {
         for (const Zone& zone : collection.zones) {
-            if (std::strcmp(zone.name, view.name) == 0) {
-                add(QString::fromUtf8(collection.name), QStringLiteral("<b>%1 / %2</b>")
-                                                            .arg(save.CountKeys(zone.tokens))
-                                                            .arg(zone.tokens.size()));
+            if (zone.name == view.name) {
+                add(collection.name, QStringLiteral("<b>%1 / %2</b>")
+                                                            .arg(save.CountKeys(zone.keys))
+                                                            .arg(zone.keys.size()));
             }
         }
     }
