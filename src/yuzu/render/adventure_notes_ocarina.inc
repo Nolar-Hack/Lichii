@@ -245,7 +245,7 @@ constexpr std::array<Zone, 29> OcarinaZones{{
     {"Village Goron", TokensGoronCity},
 }};
 
-constexpr std::array<View, 21> OcarinaViews{{
+constexpr std::array<View, 22> OcarinaViews{{
     {"Stats · Résumé", StatsSummary, false},
     {"Stats · Combat", StatsCombat, false},
     {"Stats · Exploration", StatsExploration, false},
