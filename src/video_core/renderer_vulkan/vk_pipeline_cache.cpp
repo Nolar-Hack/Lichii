@@ -1579,7 +1579,8 @@ void PipelineCache::StartGraphicsWarm(u64 title_id) {
             GraphicsPipelineLibraryCache::SetNoRetainOnThisThread(true);
             ShaderPools pools;
             while (!stop.stop_requested() && !warm_cancel) {
-                FileEnvironment env;
+                std::array<FileEnvironment, 2> envs;
+                size_t env_count = 1;
                 GraphicsPipelineCacheKey key{};
                 {
                     std::scoped_lock lock{reader->mutex};
@@ -1589,13 +1590,16 @@ void PipelineCache::StartGraphicsWarm(u64 title_id) {
                     try {
                         u32 num_envs{};
                         reader->file.read(reinterpret_cast<char*>(&num_envs), sizeof(num_envs));
-                        if (num_envs != 1) {
+                        if (num_envs != 1 && num_envs != 2) { // 2: a task and a mesh program
                             LOG_WARNING(Render_Vulkan,
                                         "Nx2Perf graphics_warm: unexpected entry, stopping");
                             reader->failed = true;
                             break;
                         }
-                        env.Deserialize(reader->file);
+                        env_count = num_envs;
+                        for (size_t index = 0; index < env_count; ++index) {
+                            envs[index].Deserialize(reader->file);
+                        }
                         reader->file.read(reinterpret_cast<char*>(&key), sizeof(key));
                         ++reader->read;
                         reader->position = reader->file.tellg();
@@ -1606,11 +1610,13 @@ void PipelineCache::StartGraphicsWarm(u64 title_id) {
                         break;
                     }
                 }
-                env.SetGuessMissing(&guess);
+                std::array<Shader::Environment*, 2> env_ptrs{&envs[0], &envs[1]};
+                for (size_t index = 0; index < env_count; ++index) {
+                    envs[index].SetGuessMissing(&guess);
+                }
                 bool ok = false;
                 try {
-                    Shader::Environment* const env_ptr = &env;
-                    ok = WarmGraphicsLibraries(pools, key, std::span{&env_ptr, 1});
+                    ok = WarmGraphicsLibraries(pools, key, std::span{env_ptrs}.first(env_count));
                 } catch (const std::exception& e) {
                     static std::atomic<u32> reported{};
                     if (reported.fetch_add(1) < 60) {
