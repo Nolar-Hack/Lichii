@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <filesystem>
@@ -10,11 +11,14 @@
 #include <unordered_map>
 #include <vector>
 
-#include <QGuiApplication>
+#include <QGridLayout>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QTabBar>
 #include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QWindow>
 
@@ -26,36 +30,40 @@
 namespace {
 namespace fs = std::filesystem;
 
+// The tabs a record appears in.
+enum Tab : u32 { Summary = 1, Combat = 2, Exploration = 4, Actions = 8 };
+
 struct Record {
     u32 hash;
     const char* title;
+    u32 tabs;
 };
 
 // The game's Int64 save keys. Names from the public demo of https://onif.info/ocarina/.
 constexpr std::array<Record, 23> OcarinaRecords{{
-    {0x8bc1257a, "Morts"},
-    {0xf7cb0ee2, "Ennemis vaincus"},
-    {0x15ea6aa2, "Skulltulas d'or"},
-    {0x4766a777, "Coffres"},
-    {0x0b7f5726, "Rubis ramassés"},
-    {0xcb183657, "Pots cassés"},
-    {0x824b47b1, "Herbe coupée"},
-    {0x30bbe1d8, "Pierres soulevées"},
-    {0x2a24450a, "Coups d'épée"},
-    {0x4ac3ff5d, "Roulades"},
-    {0xa6454431, "Sauts"},
-    {0x3eeafadd, "Distance parcourue"},
-    {0x392c7b86, "Temps sous l'eau"},
-    {0xe8c057bc, "Vol de cocotte"},
-    {0x1957b8c5, "Objets utilisés"},
-    {0xf5f1954d, "Magie dépensée"},
-    {0xd457ee3a, "Ocarina joué"},
-    {0x64b98a4e, "Discussions"},
-    {0xc0be46bc, "Discussions avec Navi"},
-    {0x70d7014b, "Pierres à potins"},
-    {0x3f31ad53, "Mini-jeux"},
-    {0xcaa00e60, "Pêche"},
-    {0xfd680ada, "Amiibo"},
+    {0x8bc1257a, "Morts", Summary | Combat},
+    {0xf7cb0ee2, "Ennemis vaincus", Summary | Combat},
+    {0x15ea6aa2, "Skulltulas d'or", Summary | Exploration},
+    {0x4766a777, "Coffres", Summary | Exploration},
+    {0x0b7f5726, "Rubis ramassés", Summary},
+    {0xcb183657, "Pots cassés", Actions},
+    {0x824b47b1, "Herbe coupée", Actions},
+    {0x30bbe1d8, "Pierres soulevées", Exploration},
+    {0x2a24450a, "Coups d'épée", Combat},
+    {0x4ac3ff5d, "Roulades", Actions},
+    {0xa6454431, "Sauts", Actions},
+    {0x3eeafadd, "Distance parcourue", Exploration},
+    {0x392c7b86, "Temps sous l'eau", Exploration},
+    {0xe8c057bc, "Vol de cocotte", Exploration},
+    {0x1957b8c5, "Objets utilisés", Combat},
+    {0xf5f1954d, "Magie dépensée", Combat},
+    {0xd457ee3a, "Ocarina joué", Actions},
+    {0x64b98a4e, "Discussions", Actions},
+    {0xc0be46bc, "Discussions avec Navi", Actions},
+    {0x70d7014b, "Pierres à potins", Exploration},
+    {0x3f31ad53, "Mini-jeux", Actions},
+    {0xcaa00e60, "Pêche", Actions},
+    {0xfd680ada, "Amiibo", Actions},
 }};
 constexpr u32 OcarinaPlayTime = 0xce97845e;
 
@@ -149,11 +157,51 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
     : QWidget(parent), game{FindGame(program_id)} {
     setAttribute(Qt::WA_TranslucentBackground);
     setWindowFlags(Qt::FramelessWindowHint | Qt::Tool);
-    label = new QLabel(this);
-    label->setStyleSheet(QStringLiteral("color: white; font-size: 13px;"));
+    setStyleSheet(QStringLiteral(
+        "QLabel { color: #e8e8e0; font-size: 11px; background: transparent; }"
+        "QTabBar { background: transparent; }"
+        "QTabBar::tab { color: #a8a8a0; background: transparent; padding: 2px 7px; border: none; "
+        "font-size: 10px; }"
+        "QTabBar::tab:selected { color: #ffffff; border-bottom: 1px solid #9fd36a; }"
+        "QToolButton { color: #c8c8c0; background: transparent; border: none; font-size: 12px; }"));
+
+    header = new QLabel(this);
+    header->installEventFilter(this);
+    collapse = new QToolButton(this);
+    collapse->setText(QStringLiteral("–"));
+    auto* top = new QHBoxLayout;
+    top->setContentsMargins(0, 0, 0, 0);
+    top->addWidget(header, 1);
+    top->addWidget(collapse);
+
+    tabs = new QTabBar(this);
+    tabs->setDrawBase(false);
+    tabs->setExpanding(false);
+    for (const char* name : {"Résumé", "Combat", "Exploration", "Actions"}) {
+        tabs->addTab(QString::fromUtf8(name));
+    }
+
+    body = new QWidget(this);
+    rows = new QGridLayout(body);
+    rows->setContentsMargins(4, 2, 4, 0);
+    rows->setHorizontalSpacing(14);
+    rows->setVerticalSpacing(1);
+
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(14, 12, 14, 12);
-    layout->addWidget(label);
+    layout->setContentsMargins(10, 6, 8, 8);
+    layout->setSpacing(3);
+    layout->addLayout(top);
+    layout->addWidget(tabs);
+    layout->addWidget(body);
+    layout->setSizeConstraint(QLayout::SetFixedSize);
+
+    connect(tabs, &QTabBar::currentChanged, this, &AdventureNotes::Refresh);
+    connect(collapse, &QToolButton::clicked, this, [this] {
+        const bool visible = !body->isVisible();
+        body->setVisible(visible);
+        tabs->setVisible(visible);
+        collapse->setText(visible ? QStringLiteral("–") : QStringLiteral("+"));
+    });
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &AdventureNotes::Refresh);
     timer->start(3000);
@@ -161,11 +209,14 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id)
 }
 
 void AdventureNotes::Refresh() {
+    while (QLayoutItem* item = rows->takeAt(0)) {
+        delete item->widget();
+        delete item;
+    }
     const auto path = game ? NewestSave(*game) : std::nullopt;
     const auto records = path ? ReadRecords(*game, *path) : std::nullopt;
     if (!records) {
-        label->setText(tr("Aucune sauvegarde trouvée pour ce jeu."));
-        adjustSize();
+        header->setText(tr("Aucune sauvegarde trouvée"));
         return;
     }
     const auto find = [&records](u32 hash) {
@@ -173,44 +224,63 @@ void AdventureNotes::Refresh() {
         return it != records->end() ? it->second : s64{0};
     };
     const s64 seconds = find(game->play_time_hash);
-    QString text = QStringLiteral("<b>%1</b><br>%2<br>")
-                       .arg(QString::fromUtf8(game->title))
-                       .arg(QString::fromStdString(path->parent_path().filename().string()));
-    text += QStringLiteral("Temps de jeu : <b>%1 h %2</b><br>")
-                .arg(seconds / 3600)
-                .arg((seconds % 3600) / 60, 2, 10, QLatin1Char('0'));
+    header->setText(QStringLiteral("<b>%1 h %2</b> &nbsp;<span style='color:#a8a8a0'>%3</span>")
+                        .arg(seconds / 3600)
+                        .arg((seconds % 3600) / 60, 2, 10, QLatin1Char('0'))
+                        .arg(QString::fromStdString(path->parent_path().filename().string())));
+    const u32 tab = 1U << std::max(tabs->currentIndex(), 0);
+    int row = 0;
     for (const Record& record : game->records) {
-        text += QStringLiteral("%1 : <b>%2</b><br>")
-                    .arg(QString::fromUtf8(record.title))
-                    .arg(find(record.hash));
+        if ((record.tabs & tab) == 0) {
+            continue;
+        }
+        auto* name = new QLabel(QString::fromUtf8(record.title), body);
+        auto* value = new QLabel(QStringLiteral("<b>%1</b>").arg(find(record.hash)), body);
+        value->setAlignment(Qt::AlignRight);
+        rows->addWidget(name, row, 0);
+        rows->addWidget(value, row, 1);
+        ++row;
     }
-    label->setText(text);
-    adjustSize();
 }
 
 void AdventureNotes::paintEvent(QPaintEvent*) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
-    painter.setBrush(QColor{20, 24, 20, 210});
+    painter.setBrush(QColor{16, 18, 16, 170});
     painter.setPen(Qt::NoPen);
-    painter.drawRoundedRect(rect(), 10.0, 10.0);
+    painter.drawRoundedRect(rect(), 8.0, 8.0);
+}
+
+void AdventureNotes::StartDrag(QPoint position) {
+    // The compositor moves the window where it can: Wayland ignores move() on top-level windows.
+    if (windowHandle() && windowHandle()->startSystemMove()) {
+        return;
+    }
+    dragging = true;
+    drag_start = position;
 }
 
 void AdventureNotes::mousePressEvent(QMouseEvent* event) {
-    if (event->button() != Qt::LeftButton) {
-        return;
+    if (event->button() == Qt::LeftButton) {
+        StartDrag(event->pos());
     }
-    if (QGuiApplication::platformName().startsWith(QStringLiteral("wayland")) && windowHandle() &&
-        windowHandle()->startSystemMove()) {
-        return;
-    }
-    drag_start = event->pos();
 }
 
 void AdventureNotes::mouseMoveEvent(QMouseEvent* event) {
-    if (event->buttons() & Qt::LeftButton) {
+    if (dragging && (event->buttons() & Qt::LeftButton)) {
         move(event->globalPosition().toPoint() - drag_start);
     }
+}
+
+bool AdventureNotes::eventFilter(QObject* object, QEvent* event) {
+    if (object == header && event->type() == QEvent::MouseButtonPress) {
+        const auto* mouse = static_cast<QMouseEvent*>(event);
+        if (mouse->button() == Qt::LeftButton) {
+            StartDrag(header->mapTo(this, mouse->pos()));
+            return true;
+        }
+    }
+    return QWidget::eventFilter(object, event);
 }
 
 void AdventureNotes::closeEvent(QCloseEvent*) {
