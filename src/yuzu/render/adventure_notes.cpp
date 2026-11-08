@@ -255,7 +255,8 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id_)
     connect(views, &QComboBox::currentIndexChanged, this, &AdventureNotes::Refresh);
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &AdventureNotes::CheckFiles);
-    timer->start(1000);
+    // Twice a second: a module that follows the running game (tick) sees room changes sooner.
+    timer->start(500);
     SetAccent(DefaultAccent);
     ApplyLayout();
     resize(sizes[strip ? 1 : 0]);
