@@ -660,8 +660,8 @@ void AdventureNotes::Refresh() {
     for (QLabel* value : values) {
         value->setFixedWidth(widest);
     }
-    for (int column = 0; column < columns; ++column) {
-        rows->setColumnStretch(column, 1);
+    for (int track = 0; track < columns; ++track) {
+        rows->setColumnStretch(track, 1);
     }
     // The spare height goes below the list: lines keep their spacing whatever the window's size.
     rows->setRowStretch((count + columns - 1) / columns, 1);
