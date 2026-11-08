@@ -56,6 +56,7 @@ private:
     void ShowMessage(const QString& text);
     void CreateModule();
     void CheckFiles();
+    void TickModule();
     void ApplyLayout();
     void SwitchLayout();
     void ToggleFold();
@@ -104,6 +105,7 @@ private:
     QToolButton* reload = nullptr;
     QToolButton* create = nullptr;
     QTimer* timer = nullptr;
+    QTimer* ticker = nullptr;
     QPoint drag_start;
     bool dragging = false;
 };

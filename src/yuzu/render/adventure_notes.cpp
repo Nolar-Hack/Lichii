@@ -255,8 +255,12 @@ AdventureNotes::AdventureNotes(MainWindow* parent, u64 program_id_)
     connect(views, &QComboBox::currentIndexChanged, this, &AdventureNotes::Refresh);
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &AdventureNotes::CheckFiles);
-    // Twice a second: a module that follows the running game (tick) sees room changes sooner.
-    timer->start(500);
+    timer->start(1000);
+    // A module that follows the running game (tick) runs ten times a second, apart from the file
+    // checks: room changes are timed to a tenth of a second.
+    ticker = new QTimer(this);
+    connect(ticker, &QTimer::timeout, this, &AdventureNotes::TickModule);
+    ticker->start(100);
     SetAccent(DefaultAccent);
     ApplyLayout();
     resize(sizes[strip ? 1 : 0]);
@@ -542,14 +546,18 @@ void AdventureNotes::CheckFiles() {
             return;
         }
     }
-    // A module may also follow the running game, about once a second (paused time not counted).
-    if (QtCommon::system && !QtCommon::system->IsPaused()) {
-        QString error;
-        if (script->Tick(error)) {
-            ReadSave();
-        } else if (!error.isEmpty()) {
-            LOG_WARNING(Frontend, "Adventure Notes tick: {}", error.toStdString());
-        }
+}
+
+void AdventureNotes::TickModule() {
+    // Paused time is not counted: tick() is not called while the emulator is paused.
+    if (!script || !QtCommon::system || QtCommon::system->IsPaused()) {
+        return;
+    }
+    QString error;
+    if (script->Tick(error)) {
+        ReadSave();
+    } else if (!error.isEmpty()) {
+        LOG_WARNING(Frontend, "Adventure Notes tick: {}", error.toStdString());
     }
 }
 

@@ -87,7 +87,7 @@ public:
 
     [[nodiscard]] bool Load(const QString& path, const QStringList& library_dirs, QString& error);
     [[nodiscard]] std::optional<NotesReport> Read(const QString& path, QString& error);
-    /// Calls the module's tick(), if it has one, twice a second while the game runs.
+    /// Calls the module's tick(), if it has one, ten times a second while the game runs.
     /// True when the module asks for its report to be read again.
     [[nodiscard]] bool Tick(QString& error);
 
