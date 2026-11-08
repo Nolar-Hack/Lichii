@@ -1852,6 +1852,9 @@ void PipelineCache::StartGraphicsWarm(u64 title_id) {
 }
 
 void PipelineCache::StartMeshWarm(u64 title_id) {
+    if (!Settings::values.use_mesh_shader_warmup.GetValue()) {
+        return;
+    }
     if (mesh_warm_thread.joinable() || !device.IsExtMeshShaderSupported()) {
         return;
     }
