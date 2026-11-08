@@ -51,6 +51,11 @@ fs::path TitleDir(u64 title_id) {
            fmt::format("{:016x}", title_id);
 }
 
+/// True when `text` ends with `suffix`.
+bool EndsWith(std::string_view text, std::string_view suffix) {
+    return text.size() >= suffix.size() && text.substr(text.size() - suffix.size()) == suffix;
+}
+
 struct ArchiveFile {
     std::string path; ///< Inside the RomFS, '/' separated (the archive identity)
     FileSys::VirtualFile file;
@@ -482,8 +487,8 @@ Result BuildWarmFilesWith(Core::System& system, const fs::path& game_path, u64 t
         return fail(*error);
     }
 
-    // Archive list, in the offline pipeline's order: every shader archive of each package, then
-    // each package's effects, sorted by path inside a package (see ClassifyGameFile).
+    // Archive list, in the offline pipeline's order: every *.bfsha.zs and *.sarc.zs of each
+    // package, then each package's Effect/*.vsetb.byml.zs, sorted by path inside a package.
     std::vector<ArchiveFile> archives;
     std::vector<ArchiveFile> effects;
     ZstdDictionaries dictionaries;
@@ -495,18 +500,14 @@ Result BuildWarmFilesWith(Core::System& system, const fs::path& game_path, u64 t
                   [](const ArchiveFile& a, const ArchiveFile& b) { return a.path < b.path; });
         std::vector<ArchiveFile> package_effects;
         for (auto& file : files) {
-            switch (ClassifyGameFile(file.path)) {
-            case GameFileKind::ShaderArchive:
+            if (EndsWith(file.path, ".bfsha.zs") || EndsWith(file.path, ".sarc.zs")) {
                 archives.push_back(file);
-                break;
-            case GameFileKind::Effect:
+            } else if (file.path.starts_with("Effect/") &&
+                       file.path.find('/', 7) == std::string::npos &&
+                       EndsWith(file.path, ".vsetb.byml.zs")) {
                 package_effects.push_back(file);
-                break;
-            case GameFileKind::ZstdDictionaries:
+            } else if (file.path == "Pack/ZsDic.pack.zs") {
                 dictionary_pack = file.file; // the newest package wins
-                break;
-            case GameFileKind::Other:
-                break;
             }
         }
         effects.insert(effects.end(), package_effects.begin(), package_effects.end());
