@@ -92,3 +92,7 @@ Remove `EDEN_NX2_SWAP_INTERVAL` to run with a free frame rate.
 - **Missing keys or firmware:** repeat step 3 and check that you started Lichii from the same folder.
 - **Game too fast or too slow:** keep CPU Clock on Normal and the speed limit at 100%.
 - **Very low FPS:** check GPU Mode and your Vulkan driver (Mesa RADV).
+- **Black screen on Linux with an AMD GPU:** start the AppImage with `EDEN_NX2_NO_MESH=1`, for
+  example `EDEN_NX2_NO_MESH=1 ./lichii-linux-x86_64-pgo.AppImage`. A player reported that this gets
+  past the black screen. It skips the game's mesh shader draws, so some objects may be missing. If
+  it helps you, please report your GPU model, Mesa version and the log so the cause can be fixed.
