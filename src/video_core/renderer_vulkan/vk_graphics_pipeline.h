@@ -312,11 +312,6 @@ public:
         return source_words;
     }
 
-    /// Some stage writes storage buffers, images or global memory: a skipped draw would lose data.
-    [[nodiscard]] bool WritesStorage() const noexcept {
-        return writes_storage;
-    }
-
     [[nodiscard]] bool UsesTransformFeedback() const noexcept {
         return key.state.xfb_enabled != 0;
     }
