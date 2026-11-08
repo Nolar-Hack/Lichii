@@ -36,6 +36,9 @@
 
 #include "common/common_types.h"
 #include "common/fs/path_util.h"
+#include "common/logging.h"
+#include "core/core.h"
+#include "qt_common/qt_common.h"
 #include "main_window.h"
 #include "render/adventure_notes.h"
 
@@ -535,6 +538,16 @@ void AdventureNotes::CheckFiles() {
         const auto saved = fs::last_write_time(*path, ec);
         if (!ec && saved != save_time) {
             ReadSave();
+            return;
+        }
+    }
+    // A module may also follow the running game, about once a second (paused time not counted).
+    if (QtCommon::system && !QtCommon::system->IsPaused()) {
+        QString error;
+        if (script->Tick(error)) {
+            ReadSave();
+        } else if (!error.isEmpty()) {
+            LOG_WARNING(Frontend, "Adventure Notes tick: {}", error.toStdString());
         }
     }
 }

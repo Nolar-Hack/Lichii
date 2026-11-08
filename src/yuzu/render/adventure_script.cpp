@@ -14,7 +14,12 @@
 #include <QFileInfo>
 #include <QJSEngine>
 #include <QJSValue>
+#include <QSaveFile>
 
+#include "core/core.h"
+#include "core/debugger/nx2_debug_tools.h"
+#include "core/hle/kernel/k_process.h"
+#include "qt_common/qt_common.h"
 #include "render/adventure_script.h"
 
 namespace {
@@ -116,12 +121,140 @@ constexpr const char* Bootstrap = R"((function (host) {
             host.utf8(data, offset === undefined ? 0 : offset, size === undefined ? -1 : size),
         file: (name) => host.file(name),
         include: (name) => host.include(name),
+        memory: (address, size) => host.memory(String(address), size),
+        search: (pattern) => host.search(pattern),
+        load: (name) => host.load(name),
+        store: (name, text) => host.store(name, String(text)),
     };
 }))";
+/// The running game, or null while none runs or it is stopping.
+Kernel::KProcess* RunningGame() {
+    Core::System* const system = QtCommon::system.get();
+    if (system == nullptr || system->IsShuttingDown()) {
+        return nullptr;
+    }
+    return system->ApplicationProcess();
+}
+
+/// The heap addresses where pattern starts, at most 64. Scans in slices so that a stopping
+/// panel or game ends it within one slice.
+std::vector<u64> SearchHeap(const std::vector<u8>& pattern, const std::atomic<bool>& stopping) {
+    std::vector<u64> hits;
+    Kernel::KProcess* const process = RunningGame();
+    if (process == nullptr || pattern.empty()) {
+        return hits;
+    }
+    const u64 start = GetInteger(process->GetPageTable().GetHeapRegionStart());
+    const u64 end = start + process->GetPageTable().GetHeapRegionSize();
+    constexpr u64 Slice = u64{256} << 20;
+    for (u64 at = start; at < end && hits.size() < 64; at += Slice) {
+        if (stopping.load(std::memory_order_relaxed) || RunningGame() == nullptr) {
+            break;
+        }
+        const u64 slice_end = (std::min)(end, at + Slice);
+        // A match may start before slice_end and end after it.
+        const u64 read_end = (std::min)(end, slice_end + pattern.size() - 1);
+        const auto found = Core::Nx2Debug::SearchGuestMemory(
+            process->GetMemory(), pattern, at, read_end, 64,
+            std::chrono::steady_clock::now() + std::chrono::seconds{10});
+        for (const u64 hit : found.hits) {
+            if (hit < slice_end && hits.size() < 64) {
+                hits.push_back(hit);
+            }
+        }
+    }
+    return hits;
+}
 } // Anonymous namespace
 
 NotesHost::NotesHost(QJSEngine* engine_, QStringList library_dirs)
     : engine{engine_}, libraries{std::move(library_dirs)} {}
+
+NotesHost::~NotesHost() {
+    stopping = true;
+    if (search_job.valid()) {
+        search_job.wait();
+    }
+}
+
+QJSValue NotesHost::memory(const QString& address, int size) {
+    bool ok = false;
+    const u64 start = QString{address}.remove(QStringLiteral("0x")).toULongLong(&ok, 16);
+    if (!ok || size <= 0 || size > 4096) {
+        engine->throwError(QStringLiteral("memory: want a hex address and a size up to 4096"));
+        return {};
+    }
+    Kernel::KProcess* const process = RunningGame();
+    if (process == nullptr) {
+        return QJSValue{QJSValue::NullValue};
+    }
+    QByteArray bytes(size, '\0');
+    if (Core::Nx2Debug::ReadGuestMemory(
+            process->GetMemory(), start,
+            std::span<u8>{reinterpret_cast<u8*>(bytes.data()), static_cast<size_t>(size)})) {
+        return QJSValue{QJSValue::NullValue};
+    }
+    return engine->toScriptValue(bytes);
+}
+
+QJSValue NotesHost::search(const QString& pattern) {
+    if (search_job.valid()) {
+        if (pattern != search_pattern ||
+            search_job.wait_for(std::chrono::seconds{0}) != std::future_status::ready) {
+            return QJSValue{QJSValue::NullValue};
+        }
+        const std::vector<u64> hits = search_job.get();
+        QJSValue result = engine->newArray(static_cast<uint>(hits.size()));
+        for (size_t i = 0; i < hits.size(); ++i) {
+            result.setProperty(static_cast<quint32>(i),
+                               QStringLiteral("0x%1").arg(hits[i], 0, 16));
+        }
+        return result;
+    }
+    const QByteArray bytes = QByteArray::fromHex(pattern.toLatin1());
+    if (bytes.isEmpty() || bytes.size() > 256) {
+        engine->throwError(QStringLiteral("search: want 1 to 256 bytes in hex"));
+        return {};
+    }
+    search_pattern = pattern;
+    std::vector<u8> wanted(bytes.begin(), bytes.end());
+    search_job = std::async(std::launch::async, [this, wanted = std::move(wanted)] {
+        return SearchHeap(wanted, stopping);
+    });
+    return QJSValue{QJSValue::NullValue};
+}
+
+QString NotesHost::StatePath(const QString& name) const {
+    if (!PlainName(name) || libraries.isEmpty()) {
+        return {};
+    }
+    // libraries[0] is notes/lib: the state sits next to it.
+    QDir state{libraries.front()};
+    state.cdUp();
+    state.mkpath(QStringLiteral("state"));
+    return state.filePath(QStringLiteral("state/%1").arg(name));
+}
+
+QString NotesHost::load(const QString& name) {
+    QFile input{StatePath(name)};
+    if (!input.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    return QString::fromUtf8(input.readAll());
+}
+
+void NotesHost::store(const QString& name, const QString& text) {
+    const QString path = StatePath(name);
+    if (path.isEmpty()) {
+        engine->throwError(QStringLiteral("store: want a plain file name"));
+        return;
+    }
+    QSaveFile output{path};
+    if (output.open(QIODevice::WriteOnly)) {
+        output.write(text.toUtf8());
+        static_cast<void>(output.commit());
+    }
+}
 
 void NotesHost::SetSlot(const QString& directory) {
     slot = directory;
@@ -239,4 +372,25 @@ std::optional<NotesReport> NotesScript::Read(const QString& path, QString& error
         return std::nullopt;
     }
     return ParseReport(result);
+}
+
+bool NotesScript::Tick(QString& error) {
+    if (!engine) {
+        return false;
+    }
+    const QJSValue tick = engine->globalObject().property(QStringLiteral("tick"));
+    if (!tick.isCallable()) {
+        return false;
+    }
+    QJSValue result;
+    {
+        Watchdog watchdog{*engine};
+        result = tick.call();
+    }
+    engine->setInterrupted(false);
+    if (result.isError()) {
+        error = Describe(result);
+        return false;
+    }
+    return result.toBool();
 }
