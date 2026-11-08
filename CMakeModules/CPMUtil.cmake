@@ -186,7 +186,7 @@ function(cpm_download url file)
         unset(args)
     endif()
 
-    foreach(i RANGE 5)
+    foreach(i RANGE 9)
         file(DOWNLOAD ${url} ${file}
             ${args}
             STATUS ret)
@@ -196,8 +196,8 @@ function(cpm_download url file)
             break()
         endif()
 
-        echo_error("Download failed. Trying again in 5 seconds")
-        sleep(5)
+        echo_error("Download failed. Trying again in 20 seconds")
+        sleep(20)
     endforeach()
 
     # TODO: use return code or something
@@ -1050,9 +1050,17 @@ function(AddCIPackage)
         set(sha512sum_file
             "${CMAKE_CURRENT_BINARY_DIR}/.cpmutil_${ARTIFACT}_sha512sum")
 
-        file(DOWNLOAD "${sha512sum_url}" "${sha512sum_file}"
-            STATUS sha512sum_status)
-        list(GET sha512sum_status 0 sha512sum_error)
+        # GitHub's release downloads answer 504 at times: try again before giving up.
+        foreach(sha512sum_attempt RANGE 9)
+            file(DOWNLOAD "${sha512sum_url}" "${sha512sum_file}"
+                STATUS sha512sum_status)
+            list(GET sha512sum_status 0 sha512sum_error)
+            if(NOT sha512sum_error)
+                break()
+            endif()
+            message(STATUS "[CPMUtil] sha512sum download for ${ARTIFACT_NAME} failed, retrying in 20 s")
+            execute_process(COMMAND ${CMAKE_COMMAND} -E sleep 20)
+        endforeach()
 
         if(sha512sum_error)
             message(FATAL_ERROR "[CPMUtil] Failed to download sha512sum "

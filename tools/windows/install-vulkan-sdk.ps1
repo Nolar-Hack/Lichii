@@ -35,7 +35,17 @@ if (Test-Path $VULKAN_SDK) {
 
 echo "Downloading Vulkan SDK $VulkanSDKVer from $Uri"
 $WebClient = New-Object System.Net.WebClient
-$WebClient.DownloadFile($Uri, $Destination)
+# The download server answers 504 at times: try again before failing the build.
+for ($Attempt = 1; ; $Attempt++) {
+    try {
+        $WebClient.DownloadFile($Uri, $Destination)
+        break
+    } catch {
+        if ($Attempt -ge 10) { throw }
+        Write-Host "Download failed ($($_.Exception.Message)), attempt $Attempt of 10; retrying in 20 s"
+        Start-Sleep -Seconds 20
+    }
+}
 echo "Finished downloading $ExeFile"
 
 $Arguments = "--root `"$VULKAN_SDK`" --accept-licenses --default-answer --confirm-command install"
