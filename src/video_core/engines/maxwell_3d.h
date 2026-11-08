@@ -3314,11 +3314,6 @@ private:
     bool SkipSameValueWrites() const {
         return skip_same_value_writes;
     }
-    /// Read once at startup: state writes check it one by one (no guard to check).
-    static inline const bool skip_same_value_writes = [] {
-        const char* value = std::getenv("EDEN_NX2_SKIP_SAME");
-        return value == nullptr || value[0] != '0';
-    }();
 
     /// Handles writes to the macro uploading register.
     void ProcessMacroUpload(u32 data);
