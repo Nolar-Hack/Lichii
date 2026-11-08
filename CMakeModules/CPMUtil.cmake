@@ -174,24 +174,31 @@ function(get_cache_path package key out)
     return(PROPAGATE ${out})
 endfunction()
 
-# Download a URL to file, with a sha512 hash
-# And retry 5 times
+# Download a URL to file, with a sha512 hash, retrying failed downloads.
+# The hash is checked after the download: with EXPECTED_HASH, a failed download is a configure
+# error ("cannot compute hash on failed download") and the retries never run. GitHub's release
+# downloads answer 504 at times, so retries matter.
 function(cpm_download url file)
     echo("Downloading ${url} to ${file}")
     list(LENGTH ARGN argn_len)
     if(argn_len GREATER 0)
         list(GET ARGN 0 hash)
-        set(args EXPECTED_HASH SHA512=${hash})
     else()
-        unset(args)
+        unset(hash)
     endif()
 
     foreach(i RANGE 9)
-        file(DOWNLOAD ${url} ${file}
-            ${args}
-            STATUS ret)
+        file(DOWNLOAD ${url} ${file} STATUS ret)
 
         list(GET ret 0 code)
+        if (code EQUAL 0 AND DEFINED hash)
+            file(SHA512 ${file} actual)
+            if (NOT actual STREQUAL hash)
+                echo_error("Download of ${url} has the wrong SHA-512")
+                file(REMOVE ${file})
+                set(code 1)
+            endif()
+        endif()
         if (code EQUAL 0)
             break()
         endif()
@@ -200,9 +207,8 @@ function(cpm_download url file)
         sleep(20)
     endforeach()
 
-    # TODO: use return code or something
     if (NOT code EQUAL 0)
-        fatal("Download for ${pkg_url} failed after 5 tries")
+        fatal("Download for ${url} failed after 10 tries")
     endif()
 endfunction()
 
