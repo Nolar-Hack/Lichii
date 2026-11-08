@@ -2676,10 +2676,20 @@ void RasterizerVulkan::ReadOcarinaActor(OcarinaActorMesh& mesh) {
 /// Track the scene depth on its reader dispatch, or try to replace a recognized upscale dispatch.
 bool RasterizerVulkan::TryOcarinaUpscale(const ComputePipeline& pipeline, bool replace) {
     constexpr u64 depth_reader = 0x1fc7a0423116281fULL;
-    const bool upscale_4k = replace && pipeline.ShaderHash() == ComputePipeline::Ocarina1440pShader;
+    // The docked 1440p pass is 1:1 as well. FSR writes it at 1440p (native AA) unless
+    // EDEN_NX2_OOT_FSR_4K=1 asks for the 3840x2160 image: on a 1440p display that image is only
+    // scaled back down, and with no jitter in the game it adds no detail, only softness.
+    static const bool want_4k = [] {
+        const char* value = std::getenv("EDEN_NX2_OOT_FSR_4K");
+        return value != nullptr && value[0] == '1';
+    }();
+    const bool pass_1440p = pipeline.ShaderHash() == ComputePipeline::Ocarina1440pShader;
     if ((!replace && pipeline.ShaderHash() != depth_reader) || !OcarinaTemporalEnabled()) {
         return false;
     }
+    // OcarinaTemporalEnabled chose the backend; only DLSS keeps the 4K image by default.
+    const bool upscale_4k = replace && pass_1440p &&
+                            (want_4k || oot_backend != VideoCommon::OcarinaUpscaleBackend::Fsr);
     const auto read_tic = [this](u32 index) -> std::optional<Tegra::Texture::TICEntry> {
         const auto& table = kepler_compute->regs.tic;
         using Entry = Tegra::Texture::TICEntry;
@@ -2762,7 +2772,8 @@ bool RasterizerVulkan::TryOcarinaUpscale(const ComputePipeline& pipeline, bool r
     using VideoCore::Surface::PixelFormat;
     const auto extent = oot_motion.extent;
     // The full-size 1080p pass is replaced only by FSR (native AA); DLAA through it is untested.
-    const bool native_size = pipeline.ShaderHash() == ComputePipeline::OcarinaFullSizeShader;
+    const bool native_size = pipeline.ShaderHash() == ComputePipeline::OcarinaFullSizeShader ||
+                             (pass_1440p && !upscale_4k);
     if (native_size && oot_backend != VideoCommon::OcarinaUpscaleBackend::Fsr) {
         return fail("full-size pass is FSR only");
     }
