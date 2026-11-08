@@ -141,7 +141,7 @@ public:
     /// EDEN_NX2_HEAVY_SKIP: a clear of these targets (0 = none) in the current frame.
     void NoteClear(u64 color_address, u64 depth_address);
 
-    [[nodiscard]] ComputePipeline* CurrentComputePipeline();
+    [[nodiscard]] ComputePipeline* CurrentComputePipeline(u64& native_key);
 
     void LoadDiskResources(u64 title_id, std::stop_token stop_loading,
                            const VideoCore::DiskResourceLoadCallback& callback);
@@ -336,6 +336,9 @@ private:
     std::atomic<size_t> last_cache_size{};
     std::atomic_bool flush_in_flight{};
 
+    /// Requested first when the cache is destroyed, to stop a rewrite of the disk cache: Android
+    /// and yuzu_cmd load with a stop token that never stops
+    std::stop_source serialization_stop;
     Common::ThreadWorker workers;
     Common::ThreadWorker serialization_thread;
     DynamicFeatures dynamic_features;

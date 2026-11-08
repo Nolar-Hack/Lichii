@@ -157,6 +157,11 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
               "checked, when it can't run on this GPU, with resolution scaling, and for the rest "
               "of the session if its output fails Lichii's checks.\nTakes effect when a game "
               "starts."));
+    INSERT(Settings, frame_rate_limit, tr("Frame rate limit (Switch 2):"),
+           tr("Rate of the Switch 2 VSync event that games start their frames on (default 60 Hz)."
+              "\nAbove 60 Hz most games run too fast; use it with a game patch that follows real "
+              "time, such as \"FPS Unlock (built-in)\" for Ocarina of Time.\nTakes effect when a "
+              "game starts."));
     INSERT(Settings, fsr_sharpening_slider, tr("RCAS Sharpness:"),
            tr("Strength of RCAS (AMD's contrast-adaptive sharpening) on the upscaler used in place "
               "of a game's DLSS (AMD FSR 3.1); 0% turns it off.\nAlso sets the sharpening "
@@ -266,6 +271,12 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
            tr("Controls the DMA read mode.\nUnsafe is faster, while Safe is more stable and can fix issues in some games.\nDefault follows the GPU Accuracy setting."));
     INSERT(Settings, gpu_fence_behavior, tr("GPU Fence Behavior:"),
            tr("Controls the GPU fence synchronization behavior.\nImmediate is the fastest option, but can introduce some issues.\nBalanced offers better compatibility and may fix issues in some games.\nAccurate further improves compatibility at the cost of some performance.\nDefault follows the GPU Mode setting."));
+    INSERT(Settings, native_compute_write_mark, tr("Native compute write mark:"),
+           tr("How much of a Switch 2 compute shader's storage buffer is treated as written by "
+              "the GPU after each dispatch.\nAuto marks what the shader's stores can reach and "
+              "falls back to Full when that cannot be proven.\nFull marks the whole binding (up to "
+              "8 MiB), the original behaviour: it can delay the game's own writes to nearby memory "
+              "(flickering effects) and copy far more data back from the GPU."));
     INSERT(Settings, use_asynchronous_shaders, tr("Enable asynchronous shader compilation"),
            tr("May reduce shader stutter."));
     INSERT(Settings, gpu_clock, tr("GPU Clocks"),
@@ -518,6 +529,11 @@ std::unique_ptr<ComboboxTranslationMap> ComboboxEnumeration(QObject* parent) {
                               PAIR(DmaAccuracy, Default, tr("Default")),
                               PAIR(DmaAccuracy, Unsafe, tr("Unsafe (fast)")),
                               PAIR(DmaAccuracy, Safe, tr("Safe (stable)")),
+                          }});
+    translations->insert({Settings::EnumMetadata<Settings::NativeComputeWriteMark>::Index(),
+                          {
+                              PAIR(NativeComputeWriteMark, Auto, tr("Auto (shader extent)")),
+                              PAIR(NativeComputeWriteMark, Full, tr("Full binding")),
                           }});
     translations->insert({Settings::EnumMetadata<Settings::GpuFenceBehavior>::Index(),
                           {

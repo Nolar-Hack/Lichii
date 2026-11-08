@@ -352,6 +352,10 @@ function(fetch_package)
     # Write patch key
     file(WRITE "${abs_path}/.cpm_patch_key" ${ARG_PATCH_KEY})
 
+    # Record the hash the archive was verified against, so a CI package already in the cache can
+    # be used without downloading its sha512sum again (AddCIPackage)
+    file(WRITE "${abs_path}/.cpm_archive_sha512" ${ARG_HASH})
+
     # done! :)
     file(REMOVE_RECURSE ${file})
 endfunction()
@@ -1049,40 +1053,54 @@ function(AddCIPackage)
             set(EXTRA_ARGS MODULE_PATH)
         endif()
 
-        # download sha512sum file
-        # TODO: CI pkgs
-        set(sha512sum_url
-            "https://${ARTIFACT_GIT_HOST}/${ARTIFACT_REPO}/releases/download/${ARTIFACT_VERSION}/${ARTIFACT}.sha512sum")
-        set(sha512sum_file
-            "${CMAKE_CURRENT_BINARY_DIR}/.cpmutil_${ARTIFACT}_sha512sum")
+        set(ARTIFACT_KEY "${ARTIFACT_VERSION}-${pkgname}")
+        get_cache_path(${ARTIFACT_PACKAGE} ${ARTIFACT_KEY} artifact_cache_path)
+        set(cached_sha512_file "${artifact_cache_path}/.cpm_archive_sha512")
 
-        # GitHub's release downloads answer 504 at times: try again before giving up.
-        foreach(sha512sum_attempt RANGE 9)
-            file(DOWNLOAD "${sha512sum_url}" "${sha512sum_file}"
-                STATUS sha512sum_status)
-            list(GET sha512sum_status 0 sha512sum_error)
-            if(NOT sha512sum_error)
-                break()
+        # A package already in the cache was verified against its sha512sum when it was
+        # downloaded; reuse that hash so configuring works while the host is unreachable
+        if(EXISTS "${cached_sha512_file}")
+            file(READ "${cached_sha512_file}" sha512sum_hash)
+            string(STRIP "${sha512sum_hash}" sha512sum_hash)
+        else()
+            set(sha512sum_url
+                "https://${ARTIFACT_GIT_HOST}/${ARTIFACT_REPO}/releases/download/${ARTIFACT_VERSION}/${ARTIFACT}.sha512sum")
+            set(sha512sum_file
+                "${CMAKE_CURRENT_BINARY_DIR}/.cpmutil_${ARTIFACT}_sha512sum")
+
+            # GitHub's release downloads answer 504 at times: try again before giving up.
+            foreach(sha512sum_attempt RANGE 9)
+                file(DOWNLOAD "${sha512sum_url}" "${sha512sum_file}"
+                    STATUS sha512sum_status)
+                list(GET sha512sum_status 0 sha512sum_error)
+                if(NOT sha512sum_error)
+                    break()
+                endif()
+                message(STATUS "[CPMUtil] sha512sum download for ${ARTIFACT_NAME} failed, retrying in 20 s")
+                execute_process(COMMAND ${CMAKE_COMMAND} -E sleep 20)
+            endforeach()
+
+            if(sha512sum_error)
+                message(FATAL_ERROR "[CPMUtil] Failed to download sha512sum "
+                    "for ${ARTIFACT_NAME} from ${sha512sum_url}")
             endif()
-            message(STATUS "[CPMUtil] sha512sum download for ${ARTIFACT_NAME} failed, retrying in 20 s")
-            execute_process(COMMAND ${CMAKE_COMMAND} -E sleep 20)
-        endforeach()
 
-        if(sha512sum_error)
-            message(FATAL_ERROR "[CPMUtil] Failed to download sha512sum "
-                "for ${ARTIFACT_NAME} from ${sha512sum_url}")
+            file(READ "${sha512sum_file}" sha512sum_hash)
+            string(STRIP "${sha512sum_hash}" sha512sum_hash)
+            file(REMOVE "${sha512sum_file}")
+
+            # Caches extracted before hashes were recorded get the hash now
+            if(EXISTS "${artifact_cache_path}/.cpm_patch_key")
+                file(WRITE "${cached_sha512_file}" "${sha512sum_hash}")
+            endif()
         endif()
-
-        file(READ "${sha512sum_file}" sha512sum_hash)
-        string(STRIP "${sha512sum_hash}" sha512sum_hash)
-        file(REMOVE "${sha512sum_file}")
 
         AddPackage(
             NAME ${ARTIFACT_PACKAGE}
             REPO ${ARTIFACT_REPO}
             VERSION ${ARTIFACT_VERSION}
             ARTIFACT ${ARTIFACT}
-            CUSTOM_KEY "${ARTIFACT_VERSION}-${pkgname}"
+            CUSTOM_KEY "${ARTIFACT_KEY}"
             HASH ${sha512sum_hash}
             FORCE_BUNDLED_PACKAGE ON
             ${EXTRA_ARGS})

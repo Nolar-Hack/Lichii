@@ -366,6 +366,7 @@ void QueryCacheBase<Traits>::CounterReport(GPUVAddr addr, QueryType counter_type
         impl->rasterizer.SignalFence([] {});
     } else if (is_fence) {
         impl->rasterizer.SignalFence(std::move(operation));
+        VideoCore::g_signaling_query_report_fence = false;
     } else {
         if (!Settings::IsGPULevelHigh() && counter_type == QueryType::Payload) {
             if (has_timestamp) {
