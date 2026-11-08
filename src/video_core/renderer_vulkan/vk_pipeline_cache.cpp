@@ -892,6 +892,7 @@ PipelineCache::~PipelineCache() {
     compute_warm_threads.clear();
     serialization_stop.request_stop();
     background_pipelines.Stop();
+    prebuild_source.reset();
     workers.WaitForRequests();
     serialization_thread.WaitForRequests();
     SaveUsedPipelines();
@@ -1122,6 +1123,7 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
         warm_stop_callback.reset();
         compute_warm_done = true;
         background_pipelines.Stop();
+        prebuild_source.reset();
         workers.WaitForRequests();
         serialization_thread.WaitForRequests();
         if (use_vulkan_pipeline_cache && !vulkan_pipeline_cache_filename.empty()) {
@@ -1280,27 +1282,44 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
             for (const auto& env : envs) {
                 capture_bytes += env.MemorySize();
             }
-            if (background_pipelines.Add(
+            if (!prebuild_source) {
+                // One handle on the file as loaded, kept by every queued prebuild: the load can
+                // compact the cache afterwards (RemovePipelines writes a new file and renames it
+                // over this one), and the offsets below are only valid in the file read here.
+                auto source = std::make_shared<PrebuildSource>();
+                source->file.open(pipeline_cache_filename, std::ios::binary | std::ios::ate);
+                if (source->file.is_open()) {
+                    source->end = source->file.tellg();
+                    prebuild_source = std::move(source);
+                }
+            }
+            if (prebuild_source &&
+                background_pipelines.Add(
                     key, capture_bytes,
                     [this, key, offset = envs.front().FileOffset(), count = envs.size(),
-                     filename = pipeline_cache_filename] {
+                     source = prebuild_source] {
                         // Keep only an offset while queued. Cached environments are immutable;
                         // demand and background translation use the same captured inputs.
-                        std::ifstream input{filename, std::ios::binary};
-                        input.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-                        input.seekg(0, std::ios::end);
-                        const std::streampos input_end = input.tellg();
-                        input.seekg(offset);
                         std::vector<FileEnvironment> captured(count);
                         boost::container::static_vector<Shader::Environment*,
                                                         Maxwell::MaxShaderProgram>
                             env_ptrs;
+                        GraphicsPipelineCacheKey captured_key;
+                        {
+                            std::scoped_lock lock{source->mutex};
+                            auto& input = source->file;
+                            input.clear();
+                            input.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+                            input.seekg(offset);
+                            for (auto& env : captured) {
+                                env.Deserialize(input, source->end);
+                            }
+                            input.read(reinterpret_cast<char*>(&captured_key),
+                                       sizeof(captured_key));
+                        }
                         for (auto& env : captured) {
-                            env.Deserialize(input, input_end);
                             env_ptrs.push_back(&env);
                         }
-                        GraphicsPipelineCacheKey captured_key;
-                        input.read(reinterpret_cast<char*>(&captured_key), sizeof(captured_key));
                         if (captured_key != key) {
                             LOG_WARNING(Render_Vulkan, "Cached pipeline changed before prebuild");
                             return std::unique_ptr<GraphicsPipeline>{};
@@ -1383,7 +1402,14 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
     for (const auto& duplicate : graphics_duplicates) {
         superseded_bytes += duplicate.record.end - duplicate.record.begin;
     }
-    if (!stop_loading.stop_requested() &&
+#ifdef _WIN32
+    // Windows renames no file over one still open: the queued prebuilds hold the cache file, so
+    // its records are removed at a boot without them.
+    const bool cache_file_held = prebuild_source != nullptr;
+#else
+    const bool cache_file_held = false;
+#endif
+    if (!stop_loading.stop_requested() && !cache_file_held &&
         (!state.incomplete.empty() ||
          (superseded_bytes != 0 && superseded_bytes >= record_begin / 8))) {
         auto removed{std::move(state.incomplete)};
@@ -1419,6 +1445,7 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
     }
     if (stop_loading.stop_requested()) {
         background_pipelines.Stop();
+        prebuild_source.reset();
     } else {
         background_pipelines.Start(std::clamp<size_t>(num_pipeline_workers / 4, 1, 2));
         warm_cancel = false;

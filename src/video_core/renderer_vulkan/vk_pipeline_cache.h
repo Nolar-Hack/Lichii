@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <unordered_map>
 #include <unordered_set>
+#include <fstream>
 #include <memory>
 #include <stop_token>
 #include <functional>
@@ -342,6 +343,13 @@ private:
     Common::ThreadWorker workers;
     Common::ThreadWorker serialization_thread;
     DynamicFeatures dynamic_features;
+    /// The pipeline cache file as the last load read it, for the queued background prebuilds.
+    struct PrebuildSource {
+        std::mutex mutex;
+        std::ifstream file;
+        std::streampos end{};
+    };
+    std::shared_ptr<PrebuildSource> prebuild_source;
     PipelinePrebuild<GraphicsPipelineCacheKey, GraphicsPipeline> background_pipelines;
     CachedPipelineRetries<GraphicsPipeline> cached_pipeline_retries;
 };
