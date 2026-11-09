@@ -34,7 +34,19 @@ std::optional<double> QueryRefreshPeriodNs() {
     info.cbSize = sizeof(info);
     if (SUCCEEDED(DwmGetCompositionTimingInfo(nullptr, &info)) &&
         info.rateRefresh.uiNumerator != 0 && info.rateRefresh.uiDenominator != 0) {
-        return 1e9 * info.rateRefresh.uiDenominator / info.rateRefresh.uiNumerator;
+        const double nominal = 1e9 * info.rateRefresh.uiDenominator / info.rateRefresh.uiNumerator;
+        // The compositor's measured period: a "120 Hz" display may run at 119.98, and the game's
+        // frame clock follows this (genlock). The nominal rate when it looks off.
+        LARGE_INTEGER frequency{};
+        if (info.qpcRefreshPeriod != 0 && QueryPerformanceFrequency(&frequency) &&
+            frequency.QuadPart != 0) {
+            const double measured = 1e9 * static_cast<double>(info.qpcRefreshPeriod) /
+                                    static_cast<double>(frequency.QuadPart);
+            if (std::abs(measured - nominal) < nominal * 0.01) {
+                return measured;
+            }
+        }
+        return nominal;
     }
     DEVMODEW mode{};
     mode.dmSize = sizeof(mode);
@@ -70,7 +82,7 @@ void HostPacer::Refresh(Clock::time_point now, bool allowed) {
         next_refresh_query = now + std::chrono::seconds{2};
         if (const auto period = QueryRefreshPeriodNs(); period && *period > 2e6 && *period < 50e6) {
             if (!refresh_known || std::abs(*period - refresh_ns) > refresh_ns * 0.01) {
-                LOG_INFO(Render_Vulkan, "Host pacing: display refresh {:.3f} Hz", 1e9 / *period);
+                LOG_INFO(Render_Vulkan, "Host pacing: display refresh {:.4f} Hz", 1e9 / *period);
                 vblank.reset();
             }
             refresh_ns = *period;
@@ -80,6 +92,8 @@ void HostPacer::Refresh(Clock::time_point now, bool allowed) {
     pacing = allowed && refresh_known &&
              VideoCore::Nx2Debug::SwitchValue(VideoCore::Nx2Debug::g_host_pace,
                                               "EDEN_NX2_HOST_PACE", 1) != 0;
+    VideoCommon::Nx2Perf::g_host_refresh_ns.store(
+        pacing ? static_cast<long long>(refresh_ns) : 0, std::memory_order_relaxed);
 }
 
 HostPacer::Clock::time_point HostPacer::Target(Clock::time_point now) {
@@ -217,7 +231,7 @@ void HostPacer::Report(Clock::time_point now) {
         intervals += count;
     }
     LOG_INFO(Render_Vulkan,
-             "Host pacing {}: {} frames at {:.2f} Hz; shown for 1/2/3/4/5+ refreshes: "
+             "Host pacing {}: {} frames at {:.3f} Hz; shown for 1/2/3/4/5+ refreshes: "
              "{}/{}/{}/{}/{} (same refresh {}); interval mean {:.2f} ms, max {:.2f}; held {} "
              "(mean {:.2f} ms, missed {}), lead {:.2f} ms; present to shown {:.2f} ms; game "
              "frame {:.2f} ms; {} lost; caught up {}",
