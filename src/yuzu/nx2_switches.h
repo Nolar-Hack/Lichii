@@ -91,13 +91,11 @@ static void LoadNx2Switches(const char* argv0) {
                  name == "EGLANTINE_EXPERIMENTAL_STATIC_VERTEX_REPACK" ||
                  name == "EGLANTINE_TEST_VERTEX_REPACK");
     });
-#ifdef _WIN32
-    const auto config_base = Common::FS::GetAppDataRoamingDirectory();
-#else
-    const auto config_base = Common::FS::GetDataDirectory("XDG_CONFIG_HOME");
-#endif
-    if (config_base.is_absolute()) {
-        ParseSwitchFile(config_base / EDEN_DIR / "nx2_switches.txt", entries);
+    // The user's own copy sits with the rest of the configuration (user/config when portable), and
+    // takes any variable.
+    if (const auto config_dir = Common::FS::GetEdenPath(Common::FS::EdenPath::ConfigDir);
+        config_dir.is_absolute()) {
+        ParseSwitchFile(config_dir / "nx2_switches.txt", entries);
     }
     for (const auto& [name, value] : entries) {
         if (std::getenv(name.c_str()) != nullptr) {

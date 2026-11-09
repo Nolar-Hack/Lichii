@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <QApplication>
+#include <QScreen>
+#include <string>
 
 #include "common/fs/fs_paths.h"
 #include "common/fs/path_util.h"
@@ -198,6 +200,15 @@ int main(int argc, char* argv[]) {
 #endif
 
     QApplication app(argc, argv);
+#if !defined(_WIN32)
+    // The host frame pacer needs the display's refresh rate, which only Windows reports to it.
+    if (std::getenv("EDEN_NX2_HOST_REFRESH_HZ") == nullptr) {
+        if (const QScreen* screen = QGuiApplication::primaryScreen();
+            screen != nullptr && screen->refreshRate() > 1.0) {
+            setenv("EDEN_NX2_HOST_REFRESH_HZ", std::to_string(screen->refreshRate()).c_str(), 1);
+        }
+    }
+#endif
 
 #ifdef _WIN32
     OverrideWindowsFont();
