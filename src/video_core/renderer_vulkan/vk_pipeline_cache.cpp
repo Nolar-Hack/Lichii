@@ -1828,6 +1828,10 @@ void PipelineCache::RunNativePreparation(const std::filesystem::path& path,
                                          std::stop_token stop_loading,
                                          const VideoCore::DiskResourceLoadCallback& callback) {
     namespace Warm = VideoCommon::ShaderWarm;
+    ++g_native_preparing;
+    SCOPE_EXIT {
+        --g_native_preparing;
+    };
     std::unordered_set<u32> done_before;
     for (const auto& record : store.Records()) {
         done_before.insert(record.id);

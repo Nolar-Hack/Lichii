@@ -39,6 +39,11 @@
 #include "video_core/gpu_logging/gpu_logging.h"
 #include "common/settings.h"
 #include "shader_recompiler/exception.h"
+#include <bit>
+#include <fstream>
+#include <mutex>
+#include "common/cityhash.h"
+#include "common/fs/path_util.h"
 #include "video_core/nx2_fast_draw.h"
 #include "video_core/nx2_profile.h"
 
@@ -1502,6 +1507,61 @@ bool GraphicsPipeline::ConfigureDraw(const RescalingPushConstant& rescaling,
     return true;
 }
 
+
+namespace {
+// EDEN_NX2_PIPELINE_FEEDBACK (on unless =0): logs every graphics pipeline creation to
+// user/log/pipeline_feedback.csv with the driver's cache verdict (VK_EXT_pipeline_creation_feedback),
+// its time, and a hash of each part of its create info, so a pipeline prepared from a recipe and the
+// one a draw later creates can be compared part by part.
+bool PipelineFeedbackEnabled() {
+    static const bool enabled = [] {
+        const char* value = std::getenv("EDEN_NX2_PIPELINE_FEEDBACK");
+        return value == nullptr || value[0] != '0';
+    }();
+    return enabled;
+}
+
+template <typename T>
+u64 HashBytes(const T* data, size_t count) {
+    if (data == nullptr || count == 0) {
+        return 0;
+    }
+    return Common::CityHash64(reinterpret_cast<const char*>(data), sizeof(T) * count);
+}
+
+u64 Mix(u64 a, u64 b) {
+    return a ^ (b + 0x9e3779b97f4a7c15ULL + (a << 6) + (a >> 2));
+}
+
+// The sTypes of a pNext chain (the structures it holds, not their pointers).
+u64 HashChain(const void* next) {
+    u64 hash = 0;
+    for (auto* node = static_cast<const VkBaseInStructure*>(next); node != nullptr;
+         node = node->pNext) {
+        hash = Mix(hash, static_cast<u64>(node->sType));
+    }
+    return hash;
+}
+
+void WritePipelineFeedback(const std::string& line) {
+    static std::mutex mutex;
+    static std::ofstream file = [] {
+        const auto path = Common::FS::GetEdenPath(Common::FS::EdenPath::LogDir) /
+                          "pipeline_feedback.csv";
+        std::ofstream out(path, std::ios::app);
+        out << "phase,key,precompiled,cache_hit,ms,stages,vertex_input,input_assembly,"
+               "rasterization,multisample,depth_stencil,color_blend,dynamic,flags,targets\n";
+        return out;
+    }();
+    std::scoped_lock lock{mutex};
+    file << line;
+    static u32 lines = 0;
+    if (++lines % 256 == 0) {
+        file.flush();
+    }
+}
+} // Anonymous namespace
+
 void GraphicsPipeline::MakePipeline(VkRenderPass render_pass) {
     if (IsMeshPipeline() && !device.IsExtMeshShaderSupported() && !mesh_emulation) {
         return;
@@ -1998,11 +2058,20 @@ void GraphicsPipeline::MakePipeline(VkRenderPass render_pass) {
     }
 
     const bool unoptimized = (flags & VK_PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT) != 0;
+    VkPipelineCreationFeedback creation_feedback{};
+    const VkPipelineCreationFeedbackCreateInfo feedback_ci{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATION_FEEDBACK_CREATE_INFO,
+        .pNext = nullptr,
+        .pPipelineCreationFeedback = &creation_feedback,
+        .pipelineStageCreationFeedbackCount = 0,
+        .pPipelineStageCreationFeedbacks = nullptr,
+    };
+    const bool feedback = PipelineFeedbackEnabled();
     const auto trace_begin = std::chrono::steady_clock::now();
     TracePipelineBuild("BEGIN", "graphics", key.Hash(), key.unique_hashes, unoptimized);
     pipeline = device.GetLogical().CreateGraphicsPipeline({
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext = nullptr,
+        .pNext = feedback ? &feedback_ci : nullptr,
         .flags = flags,
         .stageCount = static_cast<u32>(shader_stages.size()),
         .pStages = shader_stages.data(),
@@ -2029,6 +2098,55 @@ void GraphicsPipeline::MakePipeline(VkRenderPass render_pass) {
                        std::chrono::duration<double, std::milli>(
                            std::chrono::steady_clock::now() - trace_begin)
                            .count());
+    if (feedback) {
+        const double ms = std::chrono::duration<double, std::milli>(
+                              std::chrono::steady_clock::now() - trace_begin)
+                              .count();
+        u64 stages = 0;
+        for (const auto& stage : shader_stages) {
+            stages = Mix(stages, static_cast<u64>(stage.stage));
+            stages = Mix(stages, ShaderModuleCodeHash(stage.module));
+            stages = Mix(stages, HashChain(stage.pNext));
+        }
+        u64 vertex = Mix(HashBytes(vertex_input_ci.pVertexBindingDescriptions,
+                                   vertex_input_ci.vertexBindingDescriptionCount),
+                         HashBytes(vertex_input_ci.pVertexAttributeDescriptions,
+                                   vertex_input_ci.vertexAttributeDescriptionCount));
+        vertex = Mix(vertex, HashChain(vertex_input_ci.pNext));
+        const u64 assembly = Mix(input_assembly_ci.topology, input_assembly_ci.primitiveRestartEnable);
+        u64 raster = HashChain(rasterization_ci.pNext);
+        raster = Mix(raster, rasterization_ci.depthClampEnable);
+        raster = Mix(raster, rasterization_ci.rasterizerDiscardEnable);
+        raster = Mix(raster, rasterization_ci.polygonMode);
+        raster = Mix(raster, rasterization_ci.cullMode);
+        raster = Mix(raster, rasterization_ci.frontFace);
+        raster = Mix(raster, rasterization_ci.depthBiasEnable);
+        raster = Mix(raster, std::bit_cast<u32>(rasterization_ci.lineWidth));
+        u64 multisample = Mix(multisample_ci.rasterizationSamples, multisample_ci.sampleShadingEnable);
+        multisample = Mix(multisample, multisample_ci.alphaToCoverageEnable);
+        multisample = Mix(multisample, multisample_ci.alphaToOneEnable);
+        multisample = Mix(multisample, HashChain(multisample_ci.pNext));
+        u64 depth = Mix(depth_stencil_ci.depthTestEnable, depth_stencil_ci.depthWriteEnable);
+        depth = Mix(depth, depth_stencil_ci.depthCompareOp);
+        depth = Mix(depth, depth_stencil_ci.depthBoundsTestEnable);
+        depth = Mix(depth, depth_stencil_ci.stencilTestEnable);
+        depth = Mix(depth, HashBytes(&depth_stencil_ci.front, 1));
+        depth = Mix(depth, HashBytes(&depth_stencil_ci.back, 1));
+        u64 blend = Mix(color_blend_ci.logicOpEnable, color_blend_ci.logicOp);
+        blend = Mix(blend, HashBytes(color_blend_ci.pAttachments, color_blend_ci.attachmentCount));
+        blend = Mix(blend, HashBytes(color_blend_ci.blendConstants, 4));
+        blend = Mix(blend, HashChain(color_blend_ci.pNext));
+        const u64 dynamic = HashBytes(dynamic_state_ci.pDynamicStates, dynamic_state_ci.dynamicStateCount);
+        const u64 targets = Mix(HashBytes(key.state.color_formats.data(), key.state.color_formats.size()),
+                                key.state.depth_format.Value());
+        const bool hit = (creation_feedback.flags &
+                          VK_PIPELINE_CREATION_FEEDBACK_APPLICATION_PIPELINE_CACHE_HIT_BIT) != 0;
+        WritePipelineFeedback(fmt::format(
+            "{},{:016x},{},{},{:.2f},{:016x},{:016x},{:016x},{:016x},{:016x},{:016x},{:016x},{:016x},{:x},{:016x}\n",
+            g_native_preparing.load(std::memory_order_relaxed) > 0 ? "prep" : "game", key.Hash(),
+            precompiled ? 1 : 0, hit ? 1 : 0, ms, stages, vertex, assembly, raster, multisample, depth,
+            blend, dynamic, static_cast<u32>(flags), targets));
+    }
 
     // Log graphics pipeline creation
     if (GPU::Logging::IsActive()) {
