@@ -24,14 +24,17 @@ function gamedataRead(save, data) {
     };
     // Only the keys a module asks for are kept: saves hold many more.
     const wanted = {};
+    // data.extra_keys: keys a module checks itself, outside its collections.
+    const keys = (data.extra_keys || []).slice();
     for (const collection of data.collections) {
         for (const zone of collection.zones) {
-            for (const key of zone.keys) {
-                const [low, high] = split(key);
-                wanted[low] = wanted[low] || {};
-                wanted[low][high] = false;
-            }
+            keys.push(...zone.keys);
         }
+    }
+    for (const key of keys) {
+        const [low, high] = split(key);
+        wanted[low] = wanted[low] || {};
+        wanted[low][high] = false;
     }
     for (let word = (end - (end % 8)) >> 2; word * 4 + 8 <= size; word += 2) {
         const highs = wanted[words[word]];
@@ -56,10 +59,15 @@ function gamedataRead(save, data) {
         count(keys) {
             return keys.filter((key) => {
                 const [low, high] = split(key);
-                return wanted[low][high];
+                return wanted[low] !== undefined && wanted[low][high] === true;
             }).length;
         },
     };
+}
+
+// A zone belongs to a view of the same name, or to it with a suffix such as " (child)".
+function sameZone(zone, view) {
+    return zone.name === view.name || zone.name.startsWith(view.name + " (");
 }
 
 function gamedataReport(save, data) {
@@ -73,11 +81,19 @@ function gamedataReport(save, data) {
     for (const view of data.views) {
         const flags = (view.fields || []).filter((field) => field.kind === "flag");
         if (view.checklist && flags.length > 0) {
-            global.push({
-                title: view.name,
-                done: flags.filter((field) => table.read(field.hash, "flag") !== 0).length,
-                total: flags.length,
-            });
+            // A view's score also counts the collection zones of the same name
+            // (a dungeon's Gold Skulltulas and its boss's Heart Container).
+            let done = flags.filter((field) => table.read(field.hash, "flag") !== 0).length;
+            let total = flags.length;
+            for (const collection of data.collections) {
+                for (const zone of collection.zones) {
+                    if (sameZone(zone, view)) {
+                        done += table.count(zone.keys);
+                        total += zone.keys.length;
+                    }
+                }
+            }
+            global.push({ title: view.name, done: done, total: total });
         }
     }
     for (const collection of data.collections) {
@@ -114,9 +130,9 @@ function gamedataReport(save, data) {
         });
         for (const collection of data.collections) {
             for (const zone of collection.zones) {
-                if (zone.name === view.name) {
+                if (sameZone(zone, view)) {
                     rows.push({
-                        title: collection.name,
+                        title: collection.name + zone.name.slice(view.name.length),
                         done: table.count(zone.keys),
                         total: zone.keys.length,
                     });
