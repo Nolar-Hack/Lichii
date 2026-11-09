@@ -673,8 +673,9 @@ struct Values {
     // driver's cache holds them before the game first uses them.
     // Ask: the desktop app asks at launch while the game has no finished precache; where nothing
     // asks, as Off.
+    // Ask by default: the shipped recipe (recipes/) prepares the game's shaders on the first launch.
     SwitchableSetting<PrecacheShaders> precache_shaders{linkage,
-                                                        PrecacheShaders::Off,
+                                                        PrecacheShaders::Ask,
                                                         "precache_shaders",
                                                         Category::RendererAdvanced,
                                                         Specialization::Default,
