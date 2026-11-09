@@ -313,11 +313,21 @@ fs::path FindNativeRecipe(u64 title_id) {
         return NativeRecipePath(title_id);
     }
     std::vector<fs::path> candidates;
-    for (const auto& entry :
-         fs::directory_iterator(Common::FS::GetExeDirectory() / "recipes", ec)) {
-        if (entry.path().extension() == ".nx2recipe" && entry.is_regular_file(ec)) {
-            candidates.push_back(entry.path());
+    // Next to the program (the AppImage file's folder for an AppImage), then inside the program's
+    // own folder (an AppImage ships its recipes in usr/bin/recipes).
+    std::vector<fs::path> folders{Common::FS::GetExeDirectory() / "recipes"};
+#ifdef __linux__
+    if (const fs::path exe = fs::read_symlink("/proc/self/exe", ec); !ec) {
+        folders.push_back(exe.parent_path() / "recipes");
+    }
+#endif
+    for (const auto& folder : folders) {
+        for (const auto& entry : fs::directory_iterator(folder, ec)) {
+            if (entry.path().extension() == ".nx2recipe" && entry.is_regular_file(ec)) {
+                candidates.push_back(entry.path());
+            }
         }
+        ec.clear();
     }
     std::ranges::sort(candidates);
     for (const auto& path : candidates) {

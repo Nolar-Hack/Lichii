@@ -458,6 +458,7 @@ if(UNIX AND NOT APPLE)
     install(TARGETS yuzu)
     # The shipped Adventure Notes modules, next to the program (ShippedDir).
     install(DIRECTORY ${PROJECT_SOURCE_DIR}/dist/notes DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(DIRECTORY ${PROJECT_SOURCE_DIR}/dist/recipes DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
 if (WIN32 AND NOT YUZU_USE_BUNDLED_QT)
@@ -530,3 +531,6 @@ create_target_directory_groups(yuzu)
 # Adventure Notes modules shipped next to the program (render/adventure_notes.cpp, ShippedDir).
 add_custom_command(TARGET yuzu POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/dist/notes $<TARGET_FILE_DIR:yuzu>/notes)
+# Shader precompile recipes shipped next to the program (ShaderWarm::FindNativeRecipe).
+add_custom_command(TARGET yuzu POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/dist/recipes $<TARGET_FILE_DIR:yuzu>/recipes)

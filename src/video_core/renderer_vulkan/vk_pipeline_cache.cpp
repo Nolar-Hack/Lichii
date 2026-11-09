@@ -1811,12 +1811,9 @@ void PipelineCache::PreparePrecompiled(const std::filesystem::path& base_dir, bo
         LOG_WARNING(Render_Vulkan, "Cannot open the native shader preparation journal");
         return;
     }
-    // Without a driver cache of its own the prepared pipelines would only warm this session.
-    if (prepare && !DriverCachesPipelines(device) && !(enabled && enabled[0] == '1')) {
-        LOG_INFO(Render_Vulkan, "Native shader preparation skipped: the driver keeps no pipeline "
-                                "cache of its own (EDEN_NX2_PRECOMPILED=1 prepares anyway)");
-        prepare = false;
-    }
+    // Drivers without a disk cache of their own (Mesa) keep the prepared pipelines in Lichii's
+    // driver pipeline cache, saved after the preparation: on RADV the next launch found all of them
+    // (OoT, 2026-11-09). EDEN_NX2_PRECOMPILED=0 turns the preparation off.
     if (prepare) {
         RunNativePreparation(path, store, stop_loading, callback);
     }

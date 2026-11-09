@@ -43,27 +43,28 @@ your install, copy the whole folder.
 Double-click the empty game list (or right-click it > **Add New Game Directory**) and select the
 folder with your game. It shows up in the list.
 
-## 5. Shaders (recommended, once)
+## 5. Shaders (automatic, once)
 
-1. With no game running, open **Emulation > Configure > Graphics > Advanced** and turn on:
-   - **Shader libraries (faster first-time shader builds)**: builds each shader stage once and runs
-     the shader warm-up at game start.
-   - **Prewarm predicted mesh shaders (experimental)**: also prepares the mesh shaders OoT uses for
-     foliage.
-   - **Faster shader compiles** is already on by default. Leave it.
-2. Right-click the game > **Prepare shaders (warm-up)**. It reads the game files and extracts the
-   shaders. This takes a few minutes and only needs to be done once.
-3. Start the game. The warm-up builds every shader on the loading screen (about 10 minutes the
-   first time). After that, new areas play without shader stutter. A GPU driver update rebuilds
-   them.
+Lichii ships a shader **recipe** for Ocarina of Time (in `recipes/` next to the program). It holds no
+game code: only which shaders the game uses and how it draws them, learned from real play sessions.
 
-*Windows with an AMD RX 5000/6000 card:* if the game crashes while loading shaders, turn
-**Shader libraries** off. Those cards had a driver crash with it in other Lichii builds.
+1. Start the game. Lichii asks **Precache Shaders**: choose **Precache now**.
+2. It reads your game files, rebuilds every shader of the recipe with them and compiles them for
+   your GPU (about 20 minutes the first time, with a progress bar and a Skip button).
+3. **Restart the game once** after this first preparation. From then on, new areas play without
+   shader stutter, even ones you have never visited.
+
+A new Lichii version or GPU driver runs the preparation again; it is much shorter when your GPU
+driver has kept its cache (a few minutes). You can also start it from the game list: right-click the
+game > **Build Shader Precache**. To turn the question off or on, see **Emulation > Configure >
+Graphics > Advanced**.
 
 ## 6. Settings for Ocarina of Time
 
-Right-click the game > **Properties** > Graphics: **Resolution 1x**. Above 1x, some rooms get a
-white wash. The other defaults are fine.
+- Right-click the game > **Properties** > Graphics: **Resolution 1x**. Above 1x, some rooms get a
+  white wash.
+- Keep **FPS Unlock (built-in)** on in **Properties > Add-Ons** (it is on by default). It keeps the
+  game at the right speed, also with the 30 fps cap below.
 
 ## Bring your save
 
