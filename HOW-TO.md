@@ -25,16 +25,12 @@ and a tar.gz. The PGO build is recommended. Make the AppImage executable:
 chmod +x lichii-linux-x86_64-pgo.AppImage
 ```
 
-## 2. Create a portable folder (recommended)
+## 2. Where your data goes
 
-Lichii uses a folder named `user` in the current directory if it exists, so everything stays together:
-
-```sh
-mkdir -p ~/Lichii/user
-cd ~/Lichii
-```
-
-Start Lichii from this folder. Without a `user` folder, it uses your global configuration.
+Lichii is portable: on its first start it creates a `user` folder next to the program (next to the
+AppImage file), and keeps everything there: keys, firmware, saves, settings, shader caches, the GPU
+driver's shader cache and mods. Nothing goes in your home folder. Put the AppImage in its own folder,
+for example `~/Lichii/`, and start it from anywhere.
 
 ## 3. Install your keys and firmware
 

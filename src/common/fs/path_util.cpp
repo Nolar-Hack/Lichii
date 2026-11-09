@@ -125,8 +125,12 @@ public:
         fs::path eden_path_cache;
         fs::path eden_path_config;
 #ifdef _WIN32
-        // User directory takes priority over global %AppData% directory
+        // Portable: a "user" folder next to the program, created on the first start. Only a folder
+        // that cannot be written (Program Files) falls back to %AppData%.
         eden_path = GetExeDirectory() / PORTABLE_DIR;
+        if (std::error_code ec; !fs::is_directory(eden_path, ec)) {
+            fs::create_directories(eden_path, ec);
+        }
         if (!Exists(eden_path) || !IsDir(eden_path)) {
             eden_path = GetAppDataRoamingDirectory() / EDEN_DIR;
         }
@@ -145,13 +149,14 @@ public:
         eden_path_cache = eden_path / CACHE_DIR;
         eden_path_config = eden_path / CONFIG_DIR;
 #else
-        // A "user" folder next to the program comes first (as on Windows), so the app is portable
-        // wherever it is started from; then one in the current directory.
-        eden_path = ProgramDirectory() / PORTABLE_DIR;
-        if (ProgramDirectory().empty() || !Exists(eden_path) || !IsDir(eden_path)) {
-            eden_path = GetCurrentDir() / PORTABLE_DIR;
+        // Portable: everything lives in a "user" folder next to the program (next to the AppImage
+        // file for an AppImage), created on the first start, wherever the program is started from.
+        // Only a folder that cannot be written (a system-wide install) falls back to the XDG folders.
+        eden_path = ProgramDirectory().empty() ? fs::path{} : ProgramDirectory() / PORTABLE_DIR;
+        if (std::error_code ec; !eden_path.empty() && !fs::is_directory(eden_path, ec)) {
+            fs::create_directories(eden_path, ec);
         }
-        if (!Exists(eden_path) || !IsDir(eden_path)) {
+        if (eden_path.empty() || !Exists(eden_path) || !IsDir(eden_path)) {
             eden_path = GetDataDirectory("XDG_DATA_HOME") / EDEN_DIR;
             eden_path_cache = GetDataDirectory("XDG_CACHE_HOME") / EDEN_DIR;
             eden_path_config = GetDataDirectory("XDG_CONFIG_HOME") / EDEN_DIR;
