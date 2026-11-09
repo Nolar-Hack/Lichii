@@ -103,6 +103,19 @@ public:
         legacy_paths.insert_or_assign(legacy_path, new_path);
     }
 
+#if !defined(_WIN32) && !defined(__ANDROID__)
+    /// The folder holding the program: an AppImage runs from a read-only mount, so its folder is
+    /// the one holding the AppImage file. Empty when unknown.
+    static fs::path ProgramDirectory() {
+        if (const char* appimage = std::getenv("APPIMAGE"); appimage != nullptr && *appimage) {
+            return fs::path{appimage}.parent_path();
+        }
+        std::error_code ec;
+        const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
+        return ec ? fs::path{} : exe.parent_path();
+    }
+#endif
+
     /// In non-android devices, the current directory will first search for "user"
     /// if such directory (and it must be a directory) is found, that takes priority
     /// over the global configuration directory (in other words, portable directories
@@ -132,7 +145,12 @@ public:
         eden_path_cache = eden_path / CACHE_DIR;
         eden_path_config = eden_path / CONFIG_DIR;
 #else
-        eden_path = GetCurrentDir() / PORTABLE_DIR;
+        // A "user" folder next to the program comes first (as on Windows), so the app is portable
+        // wherever it is started from; then one in the current directory.
+        eden_path = ProgramDirectory() / PORTABLE_DIR;
+        if (ProgramDirectory().empty() || !Exists(eden_path) || !IsDir(eden_path)) {
+            eden_path = GetCurrentDir() / PORTABLE_DIR;
+        }
         if (!Exists(eden_path) || !IsDir(eden_path)) {
             eden_path = GetDataDirectory("XDG_DATA_HOME") / EDEN_DIR;
             eden_path_cache = GetDataDirectory("XDG_CACHE_HOME") / EDEN_DIR;
