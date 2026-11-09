@@ -15,8 +15,11 @@ game you own:
 
 ## 1. Download
 
-Get the Linux build from the [Releases page](https://github.com/Nolar-Hack/Lichii/releases). The PGO
-build is recommended. Make the AppImage executable:
+Get the Linux build from the [Releases page](https://github.com/Nolar-Hack/Lichii/releases), or for
+the newest test builds from [Actions](https://github.com/Nolar-Hack/Lichii/actions/workflows/release-binaries.yml):
+open the latest successful run and download an artifact at the bottom of the page (you need to be
+signed in to GitHub; artifacts expire after 7 days). Each Linux artifact is a zip holding an AppImage
+and a tar.gz. The PGO build is recommended. Make the AppImage executable:
 
 ```sh
 chmod +x lichii-linux-x86_64-pgo.AppImage
