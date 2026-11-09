@@ -82,6 +82,19 @@ static Qt::HighDpiScaleFactorRoundingPolicy GetHighDpiRoundingPolicy() {
 }
 
 int main(int argc, char* argv[]) {
+#if !defined(_WIN32) && !defined(__APPLE__)
+    // Portable: with a "user" folder next to the program, the driver's and Qt's caches go in
+    // user/cache too, instead of ~/.cache (a launcher's own values still win).
+    {
+        const auto eden_dir = Common::FS::GetEdenPath(Common::FS::EdenPath::EdenDir);
+        if (eden_dir.filename() == "user") {
+            const auto cache = Common::FS::GetEdenPath(Common::FS::EdenPath::CacheDir);
+            setenv("XDG_CACHE_HOME", cache.c_str(), 0);
+            setenv("MESA_SHADER_CACHE_DIR", (cache / "mesa").c_str(), 0);
+            setenv("MESA_SHADER_CACHE_MAX_SIZE", "10G", 0);
+        }
+    }
+#endif
     LoadNx2Switches(argv[0]);
 #if YUZU_ROOM
     bool launch_room = false;
