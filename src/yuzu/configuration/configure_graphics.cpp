@@ -244,6 +244,12 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
             continue;
         }
 #endif
+#ifndef _WIN32
+        // AMD's FSR 4 runtime is Windows-only.
+        if (setting->Id() == Settings::values.amd_fsr4.Id()) {
+            continue;
+        }
+#endif
 
         ConfigurationShared::Widget* widget = [&]() {
             if (setting->Id() == Settings::values.fsr_sharpening_slider.Id()) {
