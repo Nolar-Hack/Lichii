@@ -65,6 +65,27 @@ folder with your game. It shows up in the list.
 Right-click the game > **Properties** > Graphics: **Resolution 1x**. Above 1x, some rooms get a
 white wash. The other defaults are fine.
 
+## Bring your save
+
+1. Start the game once in Lichii and reach the title screen, then close it. This creates the save
+   folder for your profile.
+2. Right-click the game > **Open Save Data Location**. It opens
+   `user/nand/user/save/0000000000000000/<profile id>/0400486024DEC000/`.
+3. Copy your save files into it, replacing the ones there. For Ocarina of Time they are
+   `account.sav`, `option.sav` and the `slot_00` to `slot_05` folders. Copy what is *inside* the
+   game's save folder, not the folder itself.
+
+Where to find your save:
+
+- **From another Lichii, Eden or yuzu install:** right-click the game there > **Open Save Data
+  Location**, and copy the same files.
+- **From an older portable Lichii folder:** the same path under its `user/nand/user/save/...`.
+  To move everything at once (saves, settings, shader caches), copy the whole `user` folder
+  instead.
+- **From your console:** back up the save with JKSV (homebrew), then copy the files it made.
+
+Keep a copy of your old save until you have checked it loads.
+
 ## Mods
 
 Right-click the game > **Open Mod Data Location**. Make one folder per mod, with its `romfs` /
