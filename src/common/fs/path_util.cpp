@@ -107,12 +107,7 @@ public:
     /// The folder holding the program: an AppImage runs from a read-only mount, so its folder is
     /// the one holding the AppImage file. Empty when unknown.
     static fs::path ProgramDirectory() {
-        if (const char* appimage = std::getenv("APPIMAGE"); appimage != nullptr && *appimage) {
-            return fs::path{appimage}.parent_path();
-        }
-        std::error_code ec;
-        const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
-        return ec ? fs::path{} : exe.parent_path();
+        return GetExeDirectory();
     }
 #endif
 
@@ -624,3 +619,16 @@ std::string_view GetPathWithoutTop(std::string_view path) {
 }
 
 } // namespace Common::FS
+
+#ifndef _WIN32
+namespace Common::FS {
+fs::path GetExeDirectory() {
+    if (const char* appimage = std::getenv("APPIMAGE"); appimage != nullptr && *appimage) {
+        return fs::path{appimage}.parent_path();
+    }
+    std::error_code ec;
+    const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
+    return ec ? fs::path{} : exe.parent_path();
+}
+} // namespace Common::FS
+#endif

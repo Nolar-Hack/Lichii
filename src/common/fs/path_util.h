@@ -283,6 +283,14 @@ void SetEdenPath(EdenPath eden_path, const Path& new_path) {
 }
 #endif
 
+#ifndef _WIN32
+/**
+ * Gets the path of the directory containing the program: the AppImage file's folder for an
+ * AppImage, else the executable's. Empty when it cannot be found.
+ */
+[[nodiscard]] std::filesystem::path GetExeDirectory();
+#endif
+
 #ifdef _WIN32
 
 /**
