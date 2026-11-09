@@ -10,6 +10,8 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <cstdlib>
 #include <memory>
 #include <numeric>
 #include <stdexcept>
@@ -114,6 +116,13 @@ void BufferCache<P>::TickFrame() {
     }
     runtime.TickFrame(slot_buffers);
     native_indirect_uniforms_this_frame.clear();
+    static const bool mem_trace = std::getenv("EDEN_NX2_MEM_TRACE") != nullptr;
+    if (static std::chrono::steady_clock::time_point last{}; mem_trace) {
+        if (const auto now = std::chrono::steady_clock::now(); now - last >= std::chrono::seconds{2}) {
+            last = now;
+            LOG_INFO(HW_GPU, "Memory trace: buffer cache {} MiB", buffer_bytes >> 20);
+        }
+    }
     if (const GeometryStats& stats = geometry_stats; frame_tick % 600 == 0 && stats.syncs != 0) {
         if (Nx2Profile::Enabled() || Nx2Perf::Verify()) {
             LOG_INFO(HW_GPU,
@@ -121,6 +130,16 @@ void BufferCache<P>::TickFrame() {
                      stats.syncs_skipped, stats.syncs, stats.verify_mismatches);
         }
         geometry_stats = {};
+    }
+    if (frame_tick % 600 == 0) {
+        UniformKeep& keep = uniform_keep;
+        if (Nx2Profile::Enabled() || ubo_keep_verify) {
+            LOG_INFO(HW_GPU,
+                     "Uniform keeps in 600 frames: {} kept, {} streamed, {} verified, {} verify "
+                     "mismatches",
+                     keep.kept, keep.streamed_binds, keep.verified, keep.mismatches);
+        }
+        keep.kept = keep.streamed_binds = keep.verified = keep.mismatches = 0;
     }
     if (frame_tick % 600 == 0 && !uploaded_buffer_ranges.empty()) {
         for (const auto& [address, size] : uploaded_buffer_ranges) {
@@ -190,6 +209,7 @@ void BufferCache<P>::UnmapGPUMemory(size_t as_id, GPUVAddr gpu_addr, size_t size
 template <class P>
 void BufferCache<P>::WriteMemory(DAddr device_addr, u64 size, bool keep_page_gpu_data) {
     Nx2NoteListHostWrite(device_addr, size);
+    NoteUniformWrite(device_addr, size);
     // The written range lies within its pages: when they hold no GPU-written data, both lookups
     // below find nothing, so one lookup answers them.
     if (keep_page_gpu_data) {
@@ -261,6 +281,7 @@ void BufferCache<P>::CachedWriteMemory(DAddr device_addr, u64 size) {
     }
 
     Nx2NoteListHostWrite(device_addr, size);
+    NoteUniformWrite(device_addr, size);
     tmp_buffer.resize_destructive(size);
     device_memory.ReadBlockUnsafe(device_addr, tmp_buffer.data(), size);
 
@@ -507,6 +528,7 @@ bool BufferCache<P>::DMACopy(GPUVAddr src_address, GPUVAddr dest_address, u64 am
     runtime.CopyBuffer(dest_buffer, src_buffer, copies, true);
     if (has_new_downloads) {
         memory_tracker.MarkRegionAsGpuModified(*cpu_dest_address, amount);
+        NoteUniformWrite(*cpu_dest_address, amount);
         const bool should_sync = Settings::IsGPUFenceBehaviorBalanced() || Settings::IsGPUFenceBehaviorAccurate();
         if (should_sync) {
             runtime.Finish();
@@ -721,6 +743,48 @@ void BufferCache<P>::SetUniformBuffersState(const std::array<u32, NUM_STAGES>& m
         channel_state->enabled_uniform_buffer_masks = mask;
     }
     channel_state->uniform_buffer_sizes = sizes;
+}
+
+template <class P>
+void BufferCache<P>::BeginGraphicsUniforms(const Nx2FastDraw::Delta* delta) {
+    UniformKeep& keep = uniform_keep;
+    const bool unwritten = !keep.memory_writes_lost && keep.draw_deletions == buffer_deletions;
+    keep.draw_deletions = buffer_deletions;
+    keep.candidates = {};
+    keep.writes.clear();
+    const std::array<u32, NUM_STAGES> streamed = std::exchange(keep.streamed, {});
+    const bool usable = delta != nullptr && unwritten;
+    if (usable) {
+        keep.writes.insert(keep.writes.end(), keep.memory_writes.begin(),
+                           keep.memory_writes.end());
+    }
+    keep.memory_writes.clear();
+    keep.memory_writes_lost = false;
+    if (!usable) {
+        return;
+    }
+    // The device memory inline constant data landed on (writes to unmapped addresses land
+    // nowhere).
+    for (u32 write = 0; write < delta->num_device_writes; ++write) {
+        keep.writes.emplace_back(delta->device_begin[write], delta->device_end[write]);
+    }
+    for (size_t stage = 0; stage < NUM_STAGES; ++stage) {
+        keep.candidates[stage] = streamed[stage] & ~delta->binds[stage];
+    }
+}
+
+template <class P>
+bool BufferCache<P>::UniformRangeKept(size_t stage, u32 index, DAddr device_addr,
+                                      u32 size) const noexcept {
+    const UniformKeep& keep = uniform_keep;
+    if (((keep.candidates[stage] >> index) & 1) == 0) {
+        return false;
+    }
+    const auto overlaps = [&](const std::pair<DAddr, DAddr>& write) {
+        return write.first < device_addr + size && device_addr < write.second;
+    };
+    return !keep.memory_writes_lost && std::ranges::none_of(keep.writes, overlaps) &&
+           std::ranges::none_of(keep.memory_writes, overlaps);
 }
 
 template <class P>
@@ -1468,6 +1532,30 @@ void BufferCache<P>::BindHostGraphicsUniformBuffer(size_t stage, u32 index, u32 
     const u32 size = (std::min)(binding.size, (*channel_state->uniform_buffer_sizes)[stage][index]);
     Buffer& buffer = slot_buffers[binding.buffer_id];
     TouchBuffer(buffer, binding.buffer_id);
+    bool verify_kept = false;
+    if constexpr (!IS_OPENGL && VideoCommon::StreamUniformReusable<Runtime>) {
+        if (UniformRangeKept(stage, index, device_addr, size)) {
+            if (ubo_keep_verify) {
+                ++uniform_keep.verified;
+                verify_kept = true;
+                if (!VideoCommon::KeptUniformHolds<Runtime>(device_memory, stage, index,
+                                                             device_addr, size)) {
+                    if (uniform_keep.mismatches++ < 16) {
+                        LOG_ERROR(HW_GPU,
+                                  "Uniform keep verify: stage {} slot {} at {:#x}+{:#x} changed "
+                                  "since the previous draw",
+                                  stage, index, device_addr, size);
+                    }
+                }
+            } else if (VideoCommon::RebindKeptUniform(runtime, stage, index, device_addr, size)) {
+                channel_state->fast_bound_uniform_buffers[stage] |= 1u << binding_index;
+                channel_state->uniform_buffer_binding_sizes[stage][binding_index] = size;
+                uniform_keep.streamed[stage] |= 1u << index;
+                ++uniform_keep.kept;
+                return;
+            }
+        }
+    }
     const bool has_host_buffer = binding.buffer_id != NULL_BUFFER_ID;
     const u32 offset = has_host_buffer ? buffer.Offset(device_addr) : 0;
     const bool needs_alignment_stream = [&]() {
@@ -1537,6 +1625,10 @@ void BufferCache<P>::BindHostGraphicsUniformBuffer(size_t stage, u32 index, u32 
             if (VideoCommon::UniformStreamReuseEnabled()) {
                 streamed = VideoCommon::BindSmallUniformReusing(
                     runtime, device_memory, stage, index, binding_index, device_addr, size);
+                if (streamed) {
+                    uniform_keep.streamed[stage] |= 1u << index;
+                    ++uniform_keep.streamed_binds;
+                }
             }
         }
         if (!streamed) {
@@ -1546,6 +1638,11 @@ void BufferCache<P>::BindHostGraphicsUniformBuffer(size_t stage, u32 index, u32 
         return;
     }
     // Classic cached path
+    if (verify_kept && uniform_keep.mismatches++ < 16) {
+        LOG_ERROR(HW_GPU,
+                  "Uniform keep verify: stage {} slot {} at {:#x}+{:#x} is no longer streamed",
+                  stage, index, device_addr, size);
+    }
     if (SynchronizeBuffer(buffer, device_addr, size)) {
         ++channel_state->uniform_cache_hits[0];
     }
@@ -2159,6 +2256,7 @@ void BufferCache<P>::MarkWrittenBuffer(BufferId buffer_id, DAddr device_addr, u3
         ranges.Subtract(device_addr, size);
     }
     memory_tracker.MarkRegionAsGpuModified(device_addr, size);
+    NoteUniformWrite(device_addr, size);
     MarkVertexBuffersStale(device_addr, size);
     gpu_modified_ranges.Add(device_addr, size);
     QueueFenceDownload(device_addr, size);

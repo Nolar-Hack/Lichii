@@ -44,6 +44,8 @@
 #include "video_core/engines/maxwell_3d.h"
 #include "video_core/memory_manager.h"
 #include "video_core/nx2_perf.h"
+#include "video_core/nx2_profile.h"
+#include "video_core/nx2_stutter_trace.h"
 #include "video_core/pipeline_cache_files.h"
 #include "video_core/renderer_vulkan/async_draw_policy.h"
 #include "video_core/renderer_vulkan/fixed_pipeline_state.h"
@@ -1062,6 +1064,7 @@ ComputePipeline* PipelineCache::CurrentComputePipeline(u64& native_key) {
                                                        std::move(entry.pipeline));
             }
             rebuilt.rebuilds = entry.rebuilds + 1;
+            rebuilt.used = entry.used;
             entry = std::move(rebuilt);
         } else {
             // Keep the working translation when the new one cannot be built (for example a
@@ -1070,6 +1073,11 @@ ComputePipeline* PipelineCache::CurrentComputePipeline(u64& native_key) {
                         key.unique_hash, rebuilt.failure);
             entry.rebuilds = MaxComputeRebuilds;
         }
+    }
+    if (VideoCommon::StutterTrace::Enabled() && !std::exchange(entry.used, true)) {
+        VideoCommon::StutterTrace::CountLookup(
+            is_new ? VideoCommon::StutterTrace::Lookup::ComputeNew
+                   : VideoCommon::StutterTrace::Lookup::ComputePrebuilt);
     }
     return entry.Get(kepler_compute->IsNativeMode(),
                      kepler_compute->regs.code_loc.Address() + qmd.program_start, key);
@@ -1132,6 +1140,9 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
         }
     }
 
+    namespace StutterTrace = VideoCommon::StutterTrace;
+    const auto load_begin = std::chrono::steady_clock::now();
+    StutterTrace::BootMarker("shader_load_begin");
     const auto shader_dir{Common::FS::GetEdenPath(Common::FS::EdenPath::ShaderDir)};
     const auto base_dir{shader_dir / fmt::format("{:016x}", title_id)};
     if (!Common::FS::CreateDir(shader_dir) || !Common::FS::CreateDir(base_dir)) {
@@ -1168,6 +1179,8 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
     size_t skipped_pipelines = 0;
     size_t deferred_pipelines = 0;
     size_t queued_graphics = 0;
+    size_t graphics_records = 0;
+    size_t compute_records = 0;
 
     if (use_vulkan_pipeline_cache) {
         vulkan_pipeline_cache_filename =
@@ -1215,6 +1228,7 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
         state.statistics = std::make_unique<PipelineStatistics>(device);
     }
     const auto load_compute{[&](std::ifstream& file, FileEnvironment env) {
+        ++compute_records;
         ComputePipelineCacheKey key;
         file.read(reinterpret_cast<char*>(&key), sizeof(key));
         VideoCommon::CheckComputeRecord(env, key.shared_memory_size, key.workgroup_size);
@@ -1250,6 +1264,7 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
         ++state.total;
     }};
     const auto load_graphics{[&](std::ifstream& file, std::vector<FileEnvironment> envs) {
+        ++graphics_records;
         GraphicsPipelineCacheKey key;
         file.read(reinterpret_cast<char*>(&key), sizeof(key));
         VideoCommon::CheckGraphicsRecord(key.unique_hashes, envs.size());
@@ -2384,15 +2399,24 @@ void ReportUnsupportedMeshPipeline(const GraphicsPipelineCacheKey& key, const Pr
 } // Anonymous namespace
 
 GraphicsPipeline* PipelineCache::CurrentGraphicsPipelineSlowPath() {
+    namespace StutterTrace = VideoCommon::StutterTrace;
     const auto [pair, is_new]{graphics_cache.try_emplace(graphics_key)};
     auto& pipeline{pair->second};
     if (is_new) {
         ReportNewPipelineKey(graphics_key);
         pipeline = background_pipelines.Take(graphics_key);
         cached_pipeline_retries.Mark(pipeline.get());
+        if (StutterTrace::Enabled()) {
+            StutterTrace::CountLookup(pipeline ? StutterTrace::Lookup::GraphicsBackground
+                                      : disk_pipelines.contains(graphics_key.Hash())
+                                          ? StutterTrace::Lookup::GraphicsRecorded
+                                          : StutterTrace::Lookup::GraphicsNew);
+        }
         if (!pipeline) {
             pipeline = CreateGraphicsPipeline();
         }
+    } else if (StutterTrace::Enabled() && pipeline && !pipeline->WasUsed()) {
+        StutterTrace::CountLookup(StutterTrace::Lookup::GraphicsPrebuilt);
     }
     if (cached_pipeline_retries.Consume(pipeline.get())) {
         LOG_WARNING(Render_Vulkan,
@@ -3339,6 +3363,8 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateFromTranslation(
 }
 
 std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline() {
+    const VideoCommon::Nx2Profile::Scope profile_scope{
+        VideoCommon::Nx2Profile::Zone::GraphicsPipelineMiss};
     const auto begin = std::chrono::steady_clock::now();
     SCOPE_EXIT {
         std::string shaders = fmt::format("pipeline={:016x}", graphics_key.Hash());
@@ -3402,6 +3428,8 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline() {
 ComputePipelineCacheEntry PipelineCache::CreateComputePipeline(const ComputePipelineCacheKey& key,
                                                                const ShaderInfo* shader,
                                                                std::span<const u64> keep_pointers) {
+    const VideoCommon::Nx2Profile::Scope profile_scope{
+        VideoCommon::Nx2Profile::Zone::ComputePipelineMiss};
     const auto begin = std::chrono::steady_clock::now();
     SCOPE_EXIT {
         ReportRuntimePipeline("Compute", begin,
