@@ -1759,10 +1759,34 @@ void Device::RemoveUnsuitableExtensions() {
     features.mesh_shader.meshShaderQueries = VK_FALSE;
     extensions.mesh_shader = features.mesh_shader.taskShader && features.mesh_shader.meshShader;
     // EDEN_NX2_FORCE_MESH_FALLBACK=1: leave VK_EXT_mesh_shader disabled, so task/mesh draws take
-    // the compute fallback a device without it uses.
-    if (extensions.mesh_shader && std::getenv("EDEN_NX2_FORCE_MESH_FALLBACK") != nullptr) {
-        LOG_WARNING(Render_Vulkan, "EDEN_NX2_FORCE_MESH_FALLBACK: VK_EXT_mesh_shader disabled");
-        extensions.mesh_shader = false;
+    // the compute fallback a device without it uses; =0: never. Unset, the fallback is used where
+    // native task/mesh draws hang AMD GPUs (zortos293/Lichii#316, #670, #672, #871):
+    // - RADV before Mesa 26.2.5, which fixed the RADV bug behind the resets on RDNA3 and newer
+    //   (#1203); older Mesa resets RX 6000/7000/9000 cards ("gfx ring timeout", a black screen
+    //   after Ocarina of Time's opening). Newer Mesa keeps the extension: the fallback is slower
+    //   (heavy drops reported in #871) and builds its own pipelines at the first boot.
+    // - An integrated AMD GPU on any driver: an Xbox Ally X on SteamOS showed a black screen after
+    //   Ocarina's opening, and the Radeon 780M times out on AMD's driver (CheezyEmu build 11).
+    if (extensions.mesh_shader) {
+        const char* const forced = std::getenv("EDEN_NX2_FORCE_MESH_FALLBACK");
+        const VkDriverId mesh_driver = properties.driver.driverID;
+        const bool old_radv = mesh_driver == VK_DRIVER_ID_MESA_RADV &&
+                              properties.properties.driverVersion < VK_MAKE_VERSION(26, 2, 5);
+        const bool amd_integrated =
+            (mesh_driver == VK_DRIVER_ID_MESA_RADV ||
+             mesh_driver == VK_DRIVER_ID_AMD_PROPRIETARY ||
+             mesh_driver == VK_DRIVER_ID_AMD_OPEN_SOURCE) &&
+            properties.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+        if (forced != nullptr ? forced[0] != '0' : (old_radv || amd_integrated)) {
+            LOG_WARNING(Render_Vulkan,
+                        "VK_EXT_mesh_shader disabled ({}): task/mesh draws go through compute. "
+                        "EDEN_NX2_FORCE_MESH_FALLBACK=0 keeps the extension",
+                        forced != nullptr ? "EDEN_NX2_FORCE_MESH_FALLBACK"
+                        : amd_integrated  ? "integrated AMD GPU: native mesh draws hang"
+                                          : "RADV before Mesa 26.2.5: native mesh draws reset the "
+                                            "GPU, update Mesa to keep them");
+            extensions.mesh_shader = false;
+        }
     }
     RemoveExtensionFeatureIfUnsuitable(extensions.mesh_shader, features.mesh_shader,
                                        VK_EXT_MESH_SHADER_EXTENSION_NAME);
