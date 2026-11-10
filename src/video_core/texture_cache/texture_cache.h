@@ -339,6 +339,27 @@ void TextureCache<P>::ApplyThresholdOverrides(bool log) {
         (std::min)(expected_memory, critical_memory - (std::min)(critical_memory, u64{768_MiB}));
     minimum_memory =
         (std::min)(minimum_memory, expected_memory - (std::min)(expected_memory, u64{1_GiB}));
+    // EDEN_NX2_TC_CEILING_MIB: a ceiling for the critical threshold (expected 1.5 GiB under it),
+    // which only ever lowers them, so cards with a smaller budget keep theirs (port of Fritchii
+    // v5.7). Windows charges device memory to the commit limit, so there it defaults to 7680:
+    // Fritchii's playtests on a 16 GB card went from 10 to ~6 GB of VRAM with 4-6 GB of RAM kept
+    // free instead of ~1.5, at the same 58.8 fps. Elsewhere device memory costs no RAM, and a
+    // larger cache uploads less, so there is no default; 0 turns it off on Windows.
+    {
+        const char* value = std::getenv("EDEN_NX2_TC_CEILING_MIB");
+#ifdef _WIN32
+        if (value == nullptr) {
+            value = "7680";
+        }
+#endif
+        const u64 ceiling = value != nullptr ? std::strtoull(value, nullptr, 10) << 20 : 0;
+        if (ceiling >= 2_GiB) {
+            critical_memory = (std::min)(critical_memory, ceiling);
+            expected_memory = (std::min)(expected_memory, ceiling - 1536_MiB);
+            minimum_memory = (std::min)(minimum_memory,
+                                        expected_memory - (std::min)(expected_memory, u64{1_GiB}));
+        }
+    }
     // EDEN_NX2_TC_EXPECTED_MIB / EDEN_NX2_TC_CRITICAL_MIB raise the collector's thresholds past
     // MaxCriticalMemory, but never past what the device budget allows: set outright, they kept
     // the cache above a shrinking budget (other programs' video memory, out-of-memory margins) and
