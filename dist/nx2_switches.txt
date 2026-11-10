@@ -42,3 +42,13 @@ EDEN_NX2_FENCE_BATCH=1
 #EDEN_NX2_SPLIT_SKIP=1
 #EDEN_NX2_AUTO_STUB=1
 #EDEN_NX2_KEEP_ASTC=1
+
+# While a shader the game needs for the first time is built, its draws into targets drawn every
+# frame are left out for a few frames instead of freezing the picture (CheezyEmu build 11).
+# =0 brings back the older rule (only targets the game clears every frame), to test whether
+# something stays missing or wrong after walking into a new area.
+#EDEN_NX2_TRANSIENT_TARGETS=0
+
+# Idle emulated cores compile game code another core already compiled (Fritchii v5.7), fewer
+# stutters right after area loads. =0 turns it off.
+#EDEN_NX2_JIT_WARM=0
