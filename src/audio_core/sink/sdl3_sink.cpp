@@ -4,6 +4,9 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <chrono>
+#include <cstdlib>
+#include <algorithm>
 #include <span>
 #include <vector>
 
@@ -232,8 +235,42 @@ private:
             std::span<s16> output_buffer{output.data(), output.size()};
             impl->ProcessAudioOutAndRender(output_buffer, num_frames);
             static_cast<void>(SDL_PutAudioStreamData(stream, output.data(), bytes_requested));
+            impl->NoteOutput(stream, output_buffer);
         }
     }
+
+    /// Diagnostic for sound lost after the output device changed (a Bluetooth headset turned on
+    /// after the game started): every 10 s, and whenever the stream's device changes, logs which
+    /// device the stream plays on and the loudest sample the emulator gave it.
+    void NoteOutput(SDL_AudioStream* sdl_stream, std::span<const s16> samples) {
+        for (const s16 sample : samples) {
+            diag_peak = std::max(diag_peak, std::abs(static_cast<s32>(sample)));
+        }
+        ++diag_calls;
+        diag_frames += samples.size();
+        const SDL_AudioDeviceID device = SDL_GetAudioStreamDevice(sdl_stream);
+        const auto now = std::chrono::steady_clock::now();
+        const bool device_changed = device != diag_device;
+        if (!device_changed && now - diag_last < std::chrono::seconds{10}) {
+            return;
+        }
+        const char* device_name = SDL_GetAudioDeviceName(device);
+        LOG_INFO(Audio_Sink,
+                 "SDL output stream {}: device {} '{}'{}, {} callbacks, {} samples, peak {}",
+                 static_cast<const void*>(sdl_stream), device,
+                 device_name != nullptr ? device_name : "?",
+                 device_changed ? " (device changed)" : "", diag_calls, diag_frames, diag_peak);
+        diag_device = device;
+        diag_last = now;
+        diag_calls = diag_frames = 0;
+        diag_peak = 0;
+    }
+
+    SDL_AudioDeviceID diag_device{};
+    std::chrono::steady_clock::time_point diag_last{};
+    u64 diag_calls{};
+    u64 diag_frames{};
+    s32 diag_peak{};
 
     /// SDL stream attached to an opened input/output device
     SDL_AudioStream* stream{};
