@@ -273,7 +273,7 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
 
 template <class P>
 void TextureCache<P>::MarkStale(const ImageBase& image) {
-    if (!Tegra::g_nx2_ampere.load(std::memory_order_relaxed) ||
+    if (!tc_skip_stale || !Tegra::g_nx2_ampere.load(std::memory_order_relaxed) ||
         False(image.flags & ImageFlagBits::GpuModified) ||
         True(image.flags & (ImageFlagBits::CpuModified | ImageFlagBits::Sparse |
                             ImageFlagBits::Unbacked))) {
@@ -2052,7 +2052,8 @@ void TextureCache<P>::RefreshContents(Image& image, ImageId image_id) {
 
     // Made where a dropped GPU-written image left stale bytes (MarkStale): nothing to upload.
     // Pages the buffer cache wrote on the GPU may hold data written back since: upload those.
-    if (Tegra::g_nx2_ampere.load(std::memory_order_relaxed) && image.dirty_layers.empty() &&
+    if (tc_skip_stale && Tegra::g_nx2_ampere.load(std::memory_order_relaxed) &&
+        image.dirty_layers.empty() &&
         False(image.flags & (ImageFlagBits::Sparse | ImageFlagBits::SparseLayers |
                              ImageFlagBits::SparseTiles | ImageFlagBits::Unbacked)) &&
         stale_pages.IsAll(image.cpu_addr, image.guest_size_bytes)) {

@@ -8,6 +8,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <deque>
 #include <limits>
 #include <map>
@@ -648,6 +649,13 @@ private:
     void ClearStaleImage(const ImageBase& image);
     /// Clears every device range [gpu_addr, gpu_addr + size) maps to.
     void ClearStaleGpu(GPUVAddr gpu_addr, size_t size);
+    // Off unless EDEN_NX2_TC_SKIP_STALE=1: in Ocarina of Time a skipped upload can leave an
+    // effect reading stale data (a white veil in Hyrule Field near Lon Lon Ranch, white fog in
+    // Kokiri Forest, depending on the camera). Fritchii and the AMD Superior fork turned it off.
+    bool tc_skip_stale{[] {
+        const char* value = std::getenv("EDEN_NX2_TC_SKIP_STALE");
+        return value != nullptr && value[0] == '1';
+    }()};
     StalePages stale_pages;
     u64 tc_stale_skips{};        ///< Uploads skipped (last 600 frames)
     u64 tc_stale_skip_bytes{};
