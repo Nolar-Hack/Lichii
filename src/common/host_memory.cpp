@@ -1054,6 +1054,15 @@ void HostMemory::Swap(HostMemory& other) noexcept {
     std::swap(fallback_buffer, other.fallback_buffer);
 }
 
+namespace {
+/// Bytes mapped, unmapped or reprotected since start (the zero-page pass waits while it climbs).
+std::atomic<u64> g_map_activity_bytes{};
+} // namespace
+
+u64 HostMemory::MapActivityBytes() noexcept {
+    return g_map_activity_bytes.load(std::memory_order_relaxed);
+}
+
 void HostMemory::Map(size_t virtual_offset, size_t host_offset, size_t length, MemoryPermission perms, bool separate_heap) {
 #if !(defined(__OPENORBIS__) || defined(__managarm__))
     ASSERT(virtual_offset % PageAlignment == 0);
@@ -1064,6 +1073,7 @@ void HostMemory::Map(size_t virtual_offset, size_t host_offset, size_t length, M
     if (length == 0 || !virtual_base || !impl) {
         return;
     }
+    g_map_activity_bytes.fetch_add(length, std::memory_order_relaxed);
     impl->Map(virtual_offset + virtual_base_offset, host_offset, length, perms);
 #endif
 }
@@ -1076,6 +1086,7 @@ void HostMemory::Unmap(size_t virtual_offset, size_t length, bool separate_heap)
     if (length == 0 || !virtual_base || !impl) {
         return;
     }
+    g_map_activity_bytes.fetch_add(length, std::memory_order_relaxed);
     impl->Unmap(virtual_offset + virtual_base_offset, length);
 #endif
 }
@@ -1091,6 +1102,7 @@ void HostMemory::Protect(size_t virtual_offset, size_t length, MemoryPermission 
     const bool read = True(perm & MemoryPermission::Read);
     const bool write = True(perm & MemoryPermission::Write);
     const bool execute = True(perm & MemoryPermission::Execute);
+    g_map_activity_bytes.fetch_add(length, std::memory_order_relaxed);
     impl->Protect(virtual_offset + virtual_base_offset, length, read, write, execute);
 #endif
 }

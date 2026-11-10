@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifdef _WIN32
+#include <cstdlib>
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
@@ -35,7 +36,7 @@ DeviceMemory::~DeviceMemory() = default;
 #ifdef _WIN32
 // Windows can't punch holes in the guest memory section, so pages holding only zeros (games clear
 // their heaps while booting: Ocarina leaves ~7 GB) stay resident until they leave the working set.
-// A pass comes every 5 s while they keep turning up, backing off to once a minute.
+// A pass comes every 5 s while they keep turning up, backing off to once every 5 minutes.
 void DeviceMemory::TrimZeroPages(std::stop_token stop) {
     using namespace std::chrono_literals;
     Common::SetCurrentThreadName("ZeroTrim");
@@ -44,6 +45,16 @@ void DeviceMemory::TrimZeroPages(std::stop_token stop) {
     std::mutex mutex;
     std::condition_variable_any wake;
     std::chrono::seconds interval = 5s;
+    // EDEN_NX2_ZERO_TRIM_IDLE=0: the old timing. Otherwise (port of Fritchii v5.7) a pass waits
+    // while the game maps memory in bulk: its working set query and ~20,000 VirtualUnlock calls
+    // share the address space with the guest's map calls, which stalled 10-14 ms during a pass
+    // (kill and load hitches). A pass that trims little backs off to 5 minutes, not 1: after boot
+    // most passes trimmed 1-2 MiB for ~1 s of work.
+    static const bool idle_timing = [] {
+        const char* const value = std::getenv("EDEN_NX2_ZERO_TRIM_IDLE");
+        return value == nullptr || value[0] != '0';
+    }();
+    const std::chrono::seconds max_interval = idle_timing ? 300s : 60s;
     while (true) {
         {
             std::unique_lock lock{mutex};
@@ -52,13 +63,28 @@ void DeviceMemory::TrimZeroPages(std::stop_token stop) {
         if (stop.stop_requested()) {
             return;
         }
+        // Busy: over 32 MiB mapped, unmapped or protected in the last half second. At most 10
+        // waits (5 s), then the pass runs anyway.
+        for (int wait = 0; idle_timing && wait < 10; ++wait) {
+            const u64 before = Common::HostMemory::MapActivityBytes();
+            {
+                std::unique_lock lock{mutex};
+                wake.wait_for(lock, stop, 500ms, [] { return false; });
+            }
+            if (stop.stop_requested()) {
+                return;
+            }
+            if (Common::HostMemory::MapActivityBytes() - before < (u64{32} << 20)) {
+                break;
+            }
+        }
         const auto start = std::chrono::steady_clock::now();
         const auto [resident, trimmed] = buffer.TrimZeroPages();
         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                             std::chrono::steady_clock::now() - start)
                             .count();
         if (trimmed < Busy) {
-            interval = (std::min)(interval * 2, std::chrono::seconds{60});
+            interval = (std::min)(interval * 2, max_interval);
             continue;
         }
         interval = 5s;
