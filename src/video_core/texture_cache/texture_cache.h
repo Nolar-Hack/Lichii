@@ -160,6 +160,27 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
         }();
         ticks_to_destroy = (std::max)(ticks_to_destroy, min_age);
         num_iterations = aggressive_mode ? 40 : (high_priority_mode ? 20 : 10);
+        // Emergency: some scenes create several GiB of images in seconds (Kakariko: the cache went
+        // 13 -> 23 GiB on a 24 GiB card, then the process died). Ages of 10 frames and 40 images
+        // a pass cannot keep up, so near the device budget drop anything not used for 2 frames,
+        // hundreds of images at a time, until usage is back under the critical threshold.
+        // EDEN_NX2_TC_EMERGENCY=0 turns it off.
+        static const bool emergency_enabled = [] {
+            const char* value = std::getenv("EDEN_NX2_TC_EMERGENCY");
+            return value == nullptr || value[0] != '0';
+        }();
+        if (emergency_enabled && allow_aggressive && !out_of_memory) {
+            u64 emergency = critical_memory + 2_GiB;
+            if constexpr (requires { runtime.GetDeviceMemoryBudget(); }) {
+                emergency = (std::min)(emergency, runtime.GetDeviceMemoryBudget() / 10 * 9);
+            }
+            emergency = (std::max)(emergency, critical_memory + 512_MiB);
+            if (total_used_memory >= emergency) {
+                aggressive_mode = true;
+                ticks_to_destroy = (std::max)(u64{2}, static_cast<u64>(min_age));
+                num_iterations = 400;
+            }
+        }
     };
     const auto Cleanup = [this, &num_iterations, &high_priority_mode, &aggressive_mode,
                           &evict_old_costly, out_of_memory](ImageId image_id) {
