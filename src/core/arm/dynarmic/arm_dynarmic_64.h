@@ -39,6 +39,10 @@ class System;
 
 class DynarmicCallbacks64 : public Dynarmic::A64::UserCallbacks {
 public:
+    /// Warm compiles read code straight from memory: other threads reset last_code_addr
+    /// (InvalidateCacheRange) and the page copy may hold another page.
+    bool direct_code_reads = false;
+
     explicit DynarmicCallbacks64(ArmDynarmic64& parent, Kernel::KProcess* process);
 
     u64 MemoryRead(u64 vaddr, size_t size) override;
@@ -101,6 +105,7 @@ public:
 
     void SignalInterrupt(Kernel::KThread* thread) override;
     void ClearInstructionCache() override;
+    std::size_t WarmCompile(std::span<const u64> keys, const std::atomic<bool>& stop) override;
     void InvalidateCacheRange(u64 addr, std::size_t size) override;
 
 protected:

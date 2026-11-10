@@ -4,6 +4,7 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <span>
 #include <string>
 #include <vector>
@@ -68,6 +69,13 @@ public:
 
     // Clear the entire instruction cache for this CPU.
     virtual void ClearInstructionCache() = 0;
+
+    // JIT warm-up (Common::JitWarm): compiles blocks other cores ran, without running them, until
+    // `stop` is set. Only from this CPU's own thread while it runs no guest code. Returns how many
+    // keys it went through.
+    virtual std::size_t WarmCompile(std::span<const u64> keys, const std::atomic<bool>& stop) {
+        return 0;
+    }
 
     // Clear a range of the instruction cache for this CPU.
     virtual void InvalidateCacheRange(u64 addr, std::size_t size) = 0;

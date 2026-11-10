@@ -45,6 +45,14 @@ public:
     void ClearCache();
 
     /**
+     * Compiles the block `location` (an IR::LocationDescriptor value another core's JIT ran)
+     * without running it, so this JIT has it before the game needs it here (JIT warm-up, from
+     * Fritchii). Only between runs, from the thread that runs this JIT. Returns whether it
+     * compiled one (false: already there, running, or under 256 MiB of code space left).
+     */
+    bool PrecompileBlock(std::uint64_t location);
+
+    /**
      * Invalidate the code cache at a range of addresses.
      * @param start_address The starting address of the range to invalidate.
      * @param length The length (in bytes) of the range to invalidate.

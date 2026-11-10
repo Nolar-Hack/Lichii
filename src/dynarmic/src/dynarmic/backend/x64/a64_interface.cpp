@@ -12,6 +12,7 @@
 
 #include <boost/icl/interval_set.hpp>
 #include "common/assert.h"
+#include "common/jit_warm.h"
 #include "dynarmic/common/fp/fpcr.h"
 #include "dynarmic/common/llvm_disassemble.h"
 #include <bit>
@@ -241,6 +242,23 @@ private:
         return GetBlock(A64::LocationDescriptor{GetCurrentLocation()}.SetSingleStepping(true));
     }
 
+public:
+    bool PrecompileBlock(u64 location) {
+        if (is_executing) {
+            return false;
+        }
+        const IR::LocationDescriptor descriptor{location};
+        if (emitter.GetBasicBlock(descriptor)) {
+            return false;
+        }
+        if (block_of_code.SpaceRemaining() < (size_t{256} << 20)) {
+            return false;
+        }
+        static_cast<void>(GetBlock(descriptor));
+        return true;
+    }
+
+private:
     CodePtr GetBlock(IR::LocationDescriptor descriptor) {
         if (auto block = emitter.GetBasicBlock(descriptor))
             return block->entrypoint;
@@ -260,7 +278,11 @@ private:
         ir_block.Reset(arch_descriptor);
         A64::Translate(ir_block, arch_descriptor, get_code, {conf.define_unpredictable_behaviour, conf.wall_clock_cntpct});
         Optimization::Optimize(ir_block, conf, polyfill_options);
-        return emitter.Emit(ir_block).entrypoint;
+        const CodePtr entry = emitter.Emit(ir_block).entrypoint;
+        if (::Common::JitWarm::Enabled()) {
+            ::Common::JitWarm::NoteCompiled(descriptor.Value(), static_cast<u32>(conf.processor_id));
+        }
+        return entry;
     }
 
     void PerformRequestedCacheInvalidation(HaltReason hr) {
@@ -312,6 +334,10 @@ HaltReason Jit::Step() {
 
 void Jit::ClearCache() {
     impl->ClearCache();
+}
+
+bool Jit::PrecompileBlock(u64 location) {
+    return impl->PrecompileBlock(location);
 }
 
 void Jit::InvalidateCacheRange(u64 start_address, size_t length) {

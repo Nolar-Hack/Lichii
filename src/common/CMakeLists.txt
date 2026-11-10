@@ -72,6 +72,8 @@ add_library(
     fs/path_util.cpp
     fs/path_util.h
     hash.h
+    jit_warm.cpp
+    jit_warm.h
     heap_tracker.cpp
     heap_tracker.h
     hex_util.cpp
