@@ -417,13 +417,6 @@ private:
     u64 kept_scale_epoch{};
     bool kept_images_valid{};
 
-public:
-    /// Whether a stage writes storage buffers or images (its draws change memory).
-    [[nodiscard]] bool WritesStorage() const noexcept {
-        return writes_storage;
-    }
-
-private:
 
     vk::DescriptorSetLayout descriptor_set_layout;
     DescriptorAllocator descriptor_allocator;
