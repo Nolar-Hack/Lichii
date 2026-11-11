@@ -11,7 +11,8 @@ the Switch firmware, and your game.
 
 From the [Releases page](https://github.com/Nolar-Hack/Lichii/releases) (no GitHub account needed):
 
-- **Linux:** `lichii-linux-x86_64-pgo.AppImage`
+- **Linux:** `lichii-linux-x86_64-pgo.AppImage` (or `lichii-linux-x86_64-pgo.tar.gz`, the same files
+  unpacked, for systems without FUSE: extract it and run `lichii/lichii`; it needs no Qt install)
 - **Windows:** `lichii-windows-x86_64-pgo.zip`
 
 The PGO builds are the recommended ones. Newer test builds sometimes appear first on
@@ -102,7 +103,11 @@ it in the Favorites tab.
 
 Lichii reads `user/config/nx2_switches.txt` at start (one `NAME=VALUE` per line). For example,
 `EDEN_NX2_SWAP_INTERVAL=2` keeps the game at a steady 30 fps. A variable set in the environment wins
-over the file.
+over the file. `dist/nx2_switches.txt` (copied next to the program) lists the switches, each commented out.
+
+If the picture stutters or the game crashes after the video memory fills up, check
+`VMA heap 1` and `Texture cache: device memory` in the log: `EDEN_NX2_TC_CEILING_MIB=<MiB>` caps the
+texture cache, and `EDEN_NX2_TC_EMERGENCY=0` turns off the emergency clean-up (see below).
 
 ## Problems?
 

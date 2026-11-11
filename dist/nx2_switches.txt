@@ -52,3 +52,13 @@ EDEN_NX2_FENCE_BATCH=1
 # Idle emulated cores compile game code another core already compiled (Fritchii v5.7), fewer
 # stutters right after area loads. =0 turns it off.
 #EDEN_NX2_JIT_WARM=0
+
+# Emergency texture clean-up: when the cache gets 2 GiB past its critical threshold (at most 90 %
+# of the video memory budget), everything unused for 2 frames is dropped, hundreds of images a
+# pass. Some areas create several GiB of images within seconds (Kakariko on a 24 GiB card ran at
+# 25.6 GiB of 24.5 before the process died). =0 turns it off.
+#EDEN_NX2_TC_EMERGENCY=0
+
+# Hard cap (MiB) for the texture cache's critical threshold. Windows defaults to 7680 (device
+# memory counts against the commit limit there); other systems have no cap by default.
+#EDEN_NX2_TC_CEILING_MIB=12288
