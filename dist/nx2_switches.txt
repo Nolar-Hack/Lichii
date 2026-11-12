@@ -58,6 +58,12 @@ EDEN_NX2_FENCE_BATCH=1
 # pass. Some areas create several GiB of images within seconds (Kakariko on a 24 GiB card ran at
 # 25.6 GiB of 24.5 before the process died). =0 turns it off.
 #EDEN_NX2_TC_EMERGENCY=0
+# Images of 6 to 24 MiB share 64 MiB memory blocks (0 = one dedicated allocation each).
+#EDEN_NX2_MIDSIZE_IMAGE_POOL=0
+# Texture cache log every 4 s plus snapshots near the memory budget (1 = every 20 s).
+#EDEN_NX2_TC_LOG=2
+# Per-pipeline creation CSV in user/log (off by default: it only grows).
+#EDEN_NX2_PIPELINE_FEEDBACK=1
 
 # Hard cap (MiB) for the texture cache's critical threshold. Windows defaults to 7680 (device
 # memory counts against the commit limit there); other systems have no cap by default.
