@@ -196,16 +196,19 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
     const auto Cleanup = [this, &num_iterations, &high_priority_mode, &aggressive_mode,
                           &evict_old_costly, out_of_memory](ImageId image_id) {
         if (num_iterations == 0) {
+            ++gc_passes_exhausted;
             return true;
         }
         --num_iterations;
         auto& image = slot_images[image_id];
         if (True(image.flags & ImageFlagBits::IsDecoding)) {
+            ++gc_skip_decoding;
             return false;
         }
         const bool must_download = IsDownloadable(image) && False(image.flags & ImageFlagBits::BadOverlap);
         if ((!aggressive_mode && !evict_old_costly && True(image.flags & ImageFlagBits::CostlyLoad)) ||
             (!high_priority_mode && must_download)) {
+            ++(must_download ? gc_skip_download : gc_skip_costly);
             return false;
         }
         if (must_download) {
@@ -647,6 +650,25 @@ void TextureCache<P>::TickFrame() {
                  images_created, images_deleted, gc_deletes + gc_costly_deletes, gc_costly_deletes,
                  gc_download_deletes,
                  async_decodes_queued, astc_opaque_images, astc_alpha_images);
+        {
+            // How long the images alive now have gone unused, and why the collector left some.
+            std::string ages;
+            for (const u64 age : {2ULL, 10ULL, 50ULL, 150ULL, 600ULL}) {
+                size_t count{};
+                u64 bytes{};
+                if (frame_tick > age) {
+                    lru_cache.ForEachItemBelow(frame_tick - age, [&](ImageId image_id) {
+                        ++count;
+                        bytes += GetScaledImageSizeBytes(slot_images[image_id]);
+                        return false;
+                    });
+                }
+                ages += fmt::format(" >{}f: {} ({} MiB);", age, count, bytes >> 20);
+            }
+            LOG_INFO(HW_GPU, "Texture cache images unused for:{} left by the collector: {} decoding, {} costly, {} needing a download, {} passes out of iterations",
+                     ages, gc_skip_decoding, gc_skip_costly, gc_skip_download, gc_passes_exhausted);
+            gc_skip_decoding = gc_skip_costly = gc_skip_download = gc_passes_exhausted = 0;
+        }
         LOG_INFO(HW_GPU, "Texture cache last 600 frames: collector waited {} ms on the GPU for {} downloads",
                  gc_download_wait_us / 1000, gc_download_deletes);
         LOG_INFO(HW_GPU, "Texture cache last 600 frames: {} uploads from guest memory, {} MiB (largest {} MiB, {} by layer)",
