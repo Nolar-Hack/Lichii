@@ -203,14 +203,14 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
         if (retention != 0) {
             retention = (std::min)(retention, critical_memory + critical_memory / 4);
         }
-        ticks_to_destroy = EvictionAge(mode_age, total_used_memory, retention, out_of_memory);
-        // EDEN_NX2_TC_MIN_AGE=<frames>: never evict images used more recently (thrash tests),
-        // except in the emergency below.
+        // EDEN_NX2_TC_MIN_AGE=<frames>: keep images used more recently while there is room
+        // (thrash tests).
         static const u64 min_age = [] {
             const char* value = std::getenv("EDEN_NX2_TC_MIN_AGE");
             return value != nullptr ? std::strtoull(value, nullptr, 10) : 0ULL;
         }();
-        ticks_to_destroy = (std::max)(ticks_to_destroy, min_age);
+        ticks_to_destroy =
+            EvictionAge(mode_age, min_age, total_used_memory, retention, out_of_memory);
         num_iterations = aggressive_mode ? 40 : (high_priority_mode ? 20 : 10);
         gc_mode = aggressive_mode ? 2 : (high_priority_mode ? 1 : 0);
         // Emergency: some scenes create several GiB of images in seconds (Kakariko: the cache went
