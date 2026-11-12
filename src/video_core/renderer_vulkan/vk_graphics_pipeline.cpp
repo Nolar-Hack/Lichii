@@ -1511,14 +1511,14 @@ bool GraphicsPipeline::ConfigureDraw(const RescalingPushConstant& rescaling,
 
 
 namespace {
-// EDEN_NX2_PIPELINE_FEEDBACK (on unless =0): logs every graphics pipeline creation to
+// EDEN_NX2_PIPELINE_FEEDBACK=1 (off by default; the file only grows): logs every graphics pipeline creation to
 // user/log/pipeline_feedback.csv with the driver's cache verdict (VK_EXT_pipeline_creation_feedback),
 // its time, and a hash of each part of its create info, so a pipeline prepared from a recipe and the
 // one a draw later creates can be compared part by part.
 bool PipelineFeedbackEnabled() {
     static const bool enabled = [] {
         const char* value = std::getenv("EDEN_NX2_PIPELINE_FEEDBACK");
-        return value == nullptr || value[0] != '0';
+        return value != nullptr && value[0] == '1';
     }();
     return enabled;
 }
