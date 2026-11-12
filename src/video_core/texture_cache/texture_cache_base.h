@@ -7,7 +7,9 @@
 #pragma once
 
 #include <atomic>
+#include <array>
 #include <chrono>
+#include <set>
 #include <cstdlib>
 #include <deque>
 #include <limits>
@@ -194,6 +196,8 @@ class TextureCache : public VideoCommon::ChannelSetupCaches<TextureCacheChannelI
     u64 images_deleted{};
     u64 scale_epoch{};
     std::map<u64, std::pair<u32, GPUVAddr>> created_shapes;
+    std::map<u64, std::set<GPUVAddr>> created_shape_addrs; ///< Distinct addresses per created shape
+    std::map<u64, std::array<u32, 3>> created_shape_overlaps; ///< Same-shape image alive / other overlap / none
     bool debug_stats{}; ///< Collect what only the debug statistics lines use
     /// EDEN_NX2_MEM_TRACE: when the last memory trace lines were logged.
     std::chrono::steady_clock::time_point mem_trace_time{};

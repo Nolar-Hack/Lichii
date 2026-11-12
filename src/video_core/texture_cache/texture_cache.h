@@ -664,12 +664,16 @@ void TextureCache<P>::TickFrame() {
         std::sort(shapes.rbegin(), shapes.rend());
         for (size_t i = 0; i < std::min<size_t>(10, shapes.size()); ++i) {
             const u64 key = shapes[i].second;
-            LOG_INFO(HW_GPU, "  created {}x: format {} type {} levels {} layers {} {}x{} (last at {:#x})",
+            const auto& overlaps = created_shape_overlaps[key];
+            LOG_INFO(HW_GPU, "  created {}x: format {} type {} levels {} layers {} {}x{} (last at {:#x}), {} distinct addresses, same shape alive {} / other overlap {} / no overlap {}",
                      shapes[i].first, key >> 56, (key >> 52) & 0xF, (key >> 48) & 0xF,
                      (key >> 36) & 0xFFF, (key >> 18) & 0x3FFFF, key & 0x3FFFF,
-                     created_shapes[key].second);
+                     created_shapes[key].second, created_shape_addrs[key].size(), overlaps[0],
+                     overlaps[1], overlaps[2]);
         }
         created_shapes.clear();
+        created_shape_addrs.clear();
+        created_shape_overlaps.clear();
         // The per-image and per-shape tallies only feed debug lines: skip them while those are off.
         gc_deletes = gc_costly_deletes = gc_download_deletes = async_decodes_queued = 0;
         gc_download_wait_us = 0;
@@ -3314,6 +3318,19 @@ ImageId TextureCache<P>::JoinImages(const ImageInfo& info, GPUVAddr gpu_addr, DA
             auto& shape = created_shapes[key];
             ++shape.first;
             shape.second = gpu_addr;
+            created_shape_addrs[key].insert(gpu_addr);
+            // Why was this image not found? An image of the same shape and address that is still
+            // alive points at the lookup (flags, views), other overlaps at an aliased pool.
+            bool same_shape_alive = false;
+            for (const ImageId bad_id : join_bad_overlap_ids) {
+                const ImageBase& bad = slot_images[bad_id];
+                same_shape_alive |= bad.gpu_addr == gpu_addr && bad.info.format == new_info.format &&
+                                    bad.info.size.width == new_info.size.width &&
+                                    bad.info.size.height == new_info.size.height;
+            }
+            ++created_shape_overlaps[key][same_shape_alive ? 0
+                                          : (join_bad_overlap_ids.empty() &&
+                                             join_overlaps_found.empty()) ? 2 : 1];
         }
         ++images_created;
     }
