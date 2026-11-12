@@ -3505,6 +3505,11 @@ void MainWindow::OnLoadComplete() {
     loading_screen->OnLoadComplete();
 
     ui->action_Show_Adventure_Notes->setEnabled(true);
+    // Left open last time: open it again now that the game, its shaders included, has loaded.
+    if (UISettings::values.show_adventure_notes.GetValue()) {
+        ui->action_Show_Adventure_Notes->setChecked(true);
+        OnToggleAdventureNotes();
+    }
 
     perf_overlay = new PerformanceOverlay(this);
     perf_overlay->setVisible(ui->action_Show_Performance_Overlay->isChecked());
@@ -4391,12 +4396,14 @@ void MainWindow::OnToggleAdventureNotes() {
                 this, QtCommon::system->GetApplicationProcessProgramID());
             connect(adventure_notes, &AdventureNotes::closed, this, [this]() {
                 ui->action_Show_Adventure_Notes->setChecked(false);
+                UISettings::values.show_adventure_notes = false;
             });
         }
         adventure_notes->show();
     } else if (adventure_notes) {
         adventure_notes->hide();
     }
+    UISettings::values.show_adventure_notes = ui->action_Show_Adventure_Notes->isChecked();
 }
 
 void MainWindow::OnTogglePerfOverlay() {

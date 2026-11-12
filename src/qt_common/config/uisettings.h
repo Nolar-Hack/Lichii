@@ -224,6 +224,9 @@ struct Values {
 
     // perf overlay
     Setting<bool> show_perf_overlay{linkage, false, "show_perf_overlay", Category::UiGameList};
+    // The Adventure Notes panel was left open: it opens again once a game has finished loading
+    // (shaders included). Set by the View menu entry and by closing the panel, never by a game stopping.
+    Setting<bool> show_adventure_notes{linkage, false, "show_adventure_notes", Category::UiGameList};
 
     // Size & File Types Column
     Setting<bool> show_size{linkage, true, "show_size", Category::UiGameList};
