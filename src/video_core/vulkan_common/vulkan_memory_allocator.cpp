@@ -269,8 +269,36 @@ VkResult MemoryAllocator::AllocateImage(const VkImageCreateInfo &ci, bool dedica
         }
     }
     const bool huge = IsTooLargeToBack(texels, bytes);
-    VkResult result = huge ? VK_ERROR_OUT_OF_DEVICE_MEMORY
-                           : vmaCreateImage(allocator, &ci, &alloc_ci, &handle, &allocation, &alloc_info);
+    VkResult result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+    // Mid-size images (6 to 24 MiB at 4 bytes a texel, a floor of their real size) share 64 MiB
+    // blocks instead of each taking a dedicated allocation: Ocarina's Skulltula house makes ~10
+    // render targets of 14-28 MiB a frame and every vkAllocateMemory cost ~20 ms on RADV.
+    // EDEN_NX2_MIDSIZE_IMAGE_POOL=0 turns it off.
+    static const bool mid_size_pool = [] {
+        const char* value = std::getenv("EDEN_NX2_MIDSIZE_IMAGE_POOL");
+        return value == nullptr || value[0] != '0';
+    }();
+    const u64 estimated_bytes = texels * 4;
+    if (!huge && mid_size_pool && !dedicated && estimated_bytes > (6ULL << 20) &&
+        estimated_bytes <= (24ULL << 20)) {
+        u32 memory_type{};
+        if (vmaFindMemoryTypeIndexForImageInfo(allocator, &ci, &alloc_ci, &memory_type) ==
+            VK_SUCCESS) {
+            if (const VmaPool pool =
+                    device.GetSeparatePool(Device::SeparatePool::MidSizeImages, memory_type)) {
+                VmaAllocationCreateInfo pool_ci = alloc_ci;
+                pool_ci.pool = pool;
+                pool_ci.memoryTypeBits = 0;
+                result = vmaCreateImage(allocator, &ci, &pool_ci, &handle, &allocation, &alloc_info);
+            }
+        }
+    }
+    if (result != VK_SUCCESS) {
+        handle = VK_NULL_HANDLE;
+        allocation = VK_NULL_HANDLE;
+        result = huge ? VK_ERROR_OUT_OF_DEVICE_MEMORY
+                      : vmaCreateImage(allocator, &ci, &alloc_ci, &handle, &allocation, &alloc_info);
+    }
     if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY && !huge) {
         // Over the device memory budget (Switch 2 titles fill 8 GB cards): let the driver page
         // it out rather than failing the draw and aborting.
