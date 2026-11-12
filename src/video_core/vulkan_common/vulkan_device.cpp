@@ -924,6 +924,25 @@ VmaPool Device::GetSeparatePool(SeparatePool kind, u32 memory_type) const {
     return pool;
 }
 
+void Device::LogSeparatePoolStatistics() const {
+    static constexpr std::array<const char*, 3> names{"sparse pages", "device buffers",
+                                                      "mid-size images"};
+    std::scoped_lock lk{separate_pools_mutex};
+    for (size_t kind = 0; kind < separate_pools.size(); ++kind) {
+        for (u32 type = 0; type < VK_MAX_MEMORY_TYPES; ++type) {
+            const VmaPool pool = separate_pools[kind][type];
+            if (pool == VK_NULL_HANDLE) {
+                continue;
+            }
+            VmaStatistics stats{};
+            vmaGetPoolStatistics(allocator, pool, &stats);
+            LOG_INFO(Render_Vulkan, "VMA pool {} (type {}): {} blocks {} MiB, {} allocations {} MiB",
+                     names[kind], type, stats.blockCount, stats.blockBytes >> 20,
+                     stats.allocationCount, stats.allocationBytes >> 20);
+        }
+    }
+}
+
 void Device::LoadStaticPipelineCache() {
     const auto create = [this](size_t size, const void* data) {
         static_pipeline_cache = logical.CreatePipelineCache({

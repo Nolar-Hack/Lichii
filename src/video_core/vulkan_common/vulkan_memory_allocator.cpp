@@ -750,6 +750,7 @@ void LogMemoryTrace(const Device& device) {
     const VmaAllocator allocator = device.GetAllocator();
     const VkPhysicalDeviceMemoryProperties* properties{};
     vmaGetMemoryProperties(allocator, &properties);
+    device.LogSeparatePoolStatistics();
     std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
     vmaGetHeapBudgets(allocator, budgets.data());
     std::string heaps;
@@ -792,7 +793,7 @@ void LogMemoryStatistics(const Device& device) {
         if (s.blockCount == 0) {
             continue;
         }
-        LOG_DEBUG(Render_Vulkan, "VMA type {} (heap {}, flags {:#x}): {} blocks {} MiB, {} allocations {} MiB",
+        LOG_INFO(Render_Vulkan, "VMA type {} (heap {}, flags {:#x}): {} blocks {} MiB, {} allocations {} MiB",
                  type, properties->memoryTypes[type].heapIndex,
                  static_cast<u32>(properties->memoryTypes[type].propertyFlags), s.blockCount,
                  s.blockBytes >> 20, s.allocationCount, s.allocationBytes >> 20);

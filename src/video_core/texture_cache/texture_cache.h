@@ -63,6 +63,17 @@ template <class P>
 TextureCache<P>::TextureCache(Runtime& runtime_, Tegra::MaxwellDeviceMemoryManager& device_memory_)
     : runtime{runtime_}, device_memory{device_memory_} {
     debug_stats = std::getenv("EDEN_NX2_TC_LOG") != nullptr;
+#ifndef _WIN32
+    if (debug_stats) {
+        std::string env_list;
+        for (char** entry = environ; entry != nullptr && *entry != nullptr; ++entry) {
+            if (std::string_view{*entry}.starts_with("EDEN_NX2_")) {
+                env_list += fmt::format(" {}", *entry);
+            }
+        }
+        LOG_INFO(HW_GPU, "Texture cache environment:{}", env_list);
+    }
+#endif
 
     // Configure null sampler
     TSCEntry sampler_descriptor{};
@@ -141,6 +152,34 @@ TextureCache<P>::TextureCache(Runtime& runtime_, Tegra::MaxwellDeviceMemoryManag
 }
 
 template <class P>
+void TextureCache<P>::LogCollectorState(const char* why) {
+    // How long the images alive now have gone unused, what the collector did, and what touched
+    // old images again (EDEN_NX2_TC_LOG).
+    std::string ages;
+    for (const u64 age : {2ULL, 10ULL, 50ULL, 150ULL, 600ULL}) {
+        size_t count{};
+        u64 bytes{};
+        if (frame_tick > age) {
+            lru_cache.ForEachItemBelow(frame_tick - age, [&](ImageId image_id) {
+                ++count;
+                bytes += GetScaledImageSizeBytes(slot_images[image_id]);
+                return false;
+            });
+        }
+        ages += fmt::format(" >{}f: {} ({} MiB);", age, count, bytes >> 20);
+    }
+    LOG_INFO(HW_GPU, "Collector [{}] live images unused for:{}", why, ages);
+    LOG_INFO(HW_GPU, "Collector [{}] passes normal/high/aggressive/emergency {}/{}/{}/{}, candidates {} (empty passes {}), deleted {} of them {} GPU-modified {} bad-overlap; left: {} decoding, {} costly, {} needing a download, {} out of iterations",
+             why, gc_calls_by_mode[0], gc_calls_by_mode[1], gc_calls_by_mode[2], gc_calls_by_mode[3],
+             gc_candidates_total, gc_empty_collects, gc_deletes + gc_costly_deletes,
+             gc_deleted_gpu_modified, gc_deleted_bad_overlap, gc_skip_decoding, gc_skip_costly,
+             gc_skip_download, gc_passes_exhausted);
+    LOG_INFO(HW_GPU, "Collector [{}] image uses: {} prepared, {} of them after 10+ idle frames ({} MiB); thresholds expected {} critical {} retention {} MiB",
+             why, prepare_calls, prepare_revived, prepare_revived_bytes >> 20, expected_memory >> 20,
+             critical_memory >> 20, retention_limit >> 20);
+}
+
+template <class P>
 void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
     const StutterTrace::SiteScope site{StutterTrace::Site::TextureCollect};
     bool high_priority_mode = false;
@@ -148,6 +187,7 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
     bool evict_old_costly = false;
     u64 ticks_to_destroy = 0;
     size_t num_iterations = 0;
+    size_t gc_mode = 0;
     const auto Configure = [&](bool allow_aggressive) {
         high_priority_mode = out_of_memory || total_used_memory >= expected_memory;
         aggressive_mode =
@@ -171,6 +211,7 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
         }();
         ticks_to_destroy = (std::max)(ticks_to_destroy, min_age);
         num_iterations = aggressive_mode ? 40 : (high_priority_mode ? 20 : 10);
+        gc_mode = aggressive_mode ? 2 : (high_priority_mode ? 1 : 0);
         // Emergency: some scenes create several GiB of images in seconds (Kakariko: the cache went
         // 13 -> 23 GiB on a 24 GiB card, then the process died). Ages of 10 frames and 40 images
         // a pass cannot keep up, so near the device budget drop anything not used for 2 frames,
@@ -190,6 +231,7 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
                 aggressive_mode = true;
                 ticks_to_destroy = (std::max)(u64{2}, static_cast<u64>(min_age));
                 num_iterations = 400;
+                gc_mode = 3;
             }
         }
     };
@@ -231,6 +273,8 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
             UntrackImage(image, image_id);
         }
         ++(True(image.flags & ImageFlagBits::CostlyLoad) ? gc_costly_deletes : gc_deletes);
+        gc_deleted_bad_overlap += True(image.flags & ImageFlagBits::BadOverlap) ? 1 : 0;
+        gc_deleted_gpu_modified += True(image.flags & ImageFlagBits::GpuModified) ? 1 : 0;
         UnregisterImage(image_id);
         DeleteImage(image_id, image.scale_tick > frame_tick + 5);
         if (out_of_memory) {
@@ -263,7 +307,10 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
                 candidates.push_back(image_id);
                 return candidates.size() >= limit;
             });
+            ++gc_calls_by_mode[gc_mode];
+            gc_candidates_total += candidates.size();
             if (candidates.empty()) {
+                ++gc_empty_collects;
                 return;
             }
             if (block_image_bytes_frame == ~0ULL || frame_tick - block_image_bytes_frame >= 60) {
@@ -606,8 +653,26 @@ void TextureCache<P>::TickFrame() {
     // Every 600 frames: device memory in use against the collector's thresholds.
     // Skip expensive heap allocation, map construction, and sorting unless debug logging is explicitly enabled.
     static const bool log_tc = std::getenv("EDEN_NX2_TC_LOG") != nullptr;
+    // EDEN_NX2_TC_LOG=2 logs every 120 frames instead of 600, and every 30 frames while the
+    // device memory is within 15% of its budget (a snapshot to survive a crash).
+    static const u64 log_interval = [] {
+        const char* value = std::getenv("EDEN_NX2_TC_LOG");
+        return value != nullptr && value[0] == '2' ? 120ULL : 600ULL;
+    }();
     static u64 frames{};
-    if (log_tc && ++frames % 600 == 0) {
+    if (log_tc && log_interval == 120 && frame_tick - last_pressure_log_frame >= 30) {
+        if constexpr (requires { runtime.GetDeviceMemoryBudget(); }) {
+            const u64 budget = runtime.GetDeviceMemoryBudget();
+            if (budget != 0 && total_used_memory >= budget / 100 * 85) {
+                last_pressure_log_frame = frame_tick;
+                LOG_INFO(HW_GPU, "Texture cache PRESSURE: device memory {} MiB of budget {} MiB (expected {}, critical {}), {} images",
+                         total_used_memory >> 20, budget >> 20, expected_memory >> 20,
+                         critical_memory >> 20, slot_images.size());
+                LogCollectorState("pressure");
+            }
+        }
+    }
+    if (log_tc && ++frames % log_interval == 0) {
         u64 image_bytes{};
         size_t images{};
         std::vector<std::pair<u64, const Image*>> largest;
@@ -646,35 +711,21 @@ void TextureCache<P>::TickFrame() {
         if constexpr (requires { runtime.LogMemoryStatistics(); }) {
             runtime.LogMemoryStatistics();
         }
-        LOG_INFO(HW_GPU, "Texture cache last 600 frames: created {} images, deleted {} (collector {}, {} costly, {} downloaded), {} async decodes, ASTC {} opaque / {} alpha",
+        LOG_INFO(HW_GPU, "Texture cache last window: created {} images, deleted {} (collector {}, {} costly, {} downloaded), {} async decodes, ASTC {} opaque / {} alpha",
                  images_created, images_deleted, gc_deletes + gc_costly_deletes, gc_costly_deletes,
                  gc_download_deletes,
                  async_decodes_queued, astc_opaque_images, astc_alpha_images);
-        {
-            // How long the images alive now have gone unused, and why the collector left some.
-            std::string ages;
-            for (const u64 age : {2ULL, 10ULL, 50ULL, 150ULL, 600ULL}) {
-                size_t count{};
-                u64 bytes{};
-                if (frame_tick > age) {
-                    lru_cache.ForEachItemBelow(frame_tick - age, [&](ImageId image_id) {
-                        ++count;
-                        bytes += GetScaledImageSizeBytes(slot_images[image_id]);
-                        return false;
-                    });
-                }
-                ages += fmt::format(" >{}f: {} ({} MiB);", age, count, bytes >> 20);
-            }
-            LOG_INFO(HW_GPU, "Texture cache images unused for:{} left by the collector: {} decoding, {} costly, {} needing a download, {} passes out of iterations",
-                     ages, gc_skip_decoding, gc_skip_costly, gc_skip_download, gc_passes_exhausted);
-            gc_skip_decoding = gc_skip_costly = gc_skip_download = gc_passes_exhausted = 0;
-        }
-        LOG_INFO(HW_GPU, "Texture cache last 600 frames: collector waited {} ms on the GPU for {} downloads",
+        LogCollectorState("window");
+        gc_skip_decoding = gc_skip_costly = gc_skip_download = gc_passes_exhausted = 0;
+        gc_calls_by_mode = {};
+        gc_candidates_total = gc_empty_collects = gc_deleted_bad_overlap = gc_deleted_gpu_modified = 0;
+        prepare_calls = prepare_revived = prepare_revived_bytes = 0;
+        LOG_INFO(HW_GPU, "Texture cache last window: collector waited {} ms on the GPU for {} downloads",
                  gc_download_wait_us / 1000, gc_download_deletes);
-        LOG_INFO(HW_GPU, "Texture cache last 600 frames: {} uploads from guest memory, {} MiB (largest {} MiB, {} by layer)",
+        LOG_INFO(HW_GPU, "Texture cache last window: {} uploads from guest memory, {} MiB (largest {} MiB, {} by layer)",
                  images_uploaded, uploaded_bytes >> 20, largest_upload >> 20, layer_uploads);
         LOG_INFO(HW_GPU,
-                 "Texture cache last 600 frames: stale uploads skipped {} ({} MiB), {} uploaded "
+                 "Texture cache last window: stale uploads skipped {} ({} MiB), {} uploaded "
                  "for buffer-written pages; {} MiB of pages marked stale",
                  tc_stale_skips, tc_stale_skip_bytes >> 20, tc_stale_gpu_written,
                  (stale_pages.Count() << StalePages::PAGE_BITS) >> 20);
@@ -4513,6 +4564,11 @@ void TextureCache<P>::PrepareImage(ImageId image_id, bool is_modification, bool 
             VideoCommon::Nx2FastDraw::Break(VideoCommon::Nx2FastDraw::Reason::Invalidation);
         }
         MarkModification(image);
+    }
+    ++prepare_calls;
+    if (frame_tick - lru_cache.GetTick(image.lru_index) >= 10) {
+        ++prepare_revived;
+        prepare_revived_bytes += GetScaledImageSizeBytes(image);
     }
     lru_cache.Touch(image.lru_index, frame_tick);
 }

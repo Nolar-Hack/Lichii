@@ -169,6 +169,11 @@ class TextureCache : public VideoCommon::ChannelSetupCaches<TextureCacheChannelI
     u64 gc_download_deletes{}; ///< Evictions that downloaded the image first (a full GPU wait)
     u64 gc_download_wait_us{}; ///< Time those GPU waits took (EDEN_NX2_TC_LOG statistics)
     u64 gc_skip_decoding{}, gc_skip_costly{}, gc_skip_download{}, gc_passes_exhausted{}; ///< Why the collector left images (EDEN_NX2_TC_LOG)
+    std::array<u64, 4> gc_calls_by_mode{}; ///< Collector passes: normal, high priority, aggressive, emergency
+    u64 gc_candidates_total{}, gc_empty_collects{}, gc_deleted_bad_overlap{}, gc_deleted_gpu_modified{};
+    u64 prepare_calls{}, prepare_revived{}, prepare_revived_bytes{}; ///< Images prepared after 10+ unused frames
+    u64 last_pressure_log_frame{};
+    void LogCollectorState(const char* why);
     u64 async_decodes_queued{};
     u64 images_created{};
     u64 images_uploaded{};   ///< Image contents uploaded from guest memory (last 600 frames)

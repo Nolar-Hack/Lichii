@@ -293,6 +293,9 @@ public:
     /// The pool of that kind for a memory type, created on first use (null if that failed).
     VmaPool GetSeparatePool(SeparatePool kind, u32 memory_type) const;
 
+    /// Logs the blocks and allocations of each separate pool (EDEN_NX2_TC_LOG).
+    void LogSeparatePoolStatistics() const;
+
     /// Returns the logical device.
     const vk::Device& GetLogical() const {
         return logical;
