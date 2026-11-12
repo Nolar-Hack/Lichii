@@ -153,7 +153,16 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
         aggressive_mode =
             allow_aggressive && (out_of_memory || total_used_memory >= critical_memory);
         const u64 mode_age = aggressive_mode ? 10ULL : high_priority_mode ? 25ULL : 50ULL;
-        ticks_to_destroy = EvictionAge(mode_age, total_used_memory, retention_limit, out_of_memory);
+        // Images used in the last MinEvictionAge frames are kept until the usage reaches the
+        // retention limit (#1435), which sits near the driver's budget. Some scenes make dozens of
+        // new render targets a frame (Ocarina's Skulltula house: 6000 images, 22 GB in 25 s on a
+        // 24 GiB card, then the process died), so on a card with room to spare the limit stops
+        // 2 GiB past the critical threshold; cards whose budget is below it keep the budget.
+        u64 retention = retention_limit;
+        if (retention != 0) {
+            retention = (std::min)(retention, critical_memory + 2_GiB);
+        }
+        ticks_to_destroy = EvictionAge(mode_age, total_used_memory, retention, out_of_memory);
         // EDEN_NX2_TC_MIN_AGE=<frames>: never evict images used more recently (thrash tests).
         static const u64 min_age = [] {
             const char* value = std::getenv("EDEN_NX2_TC_MIN_AGE");
