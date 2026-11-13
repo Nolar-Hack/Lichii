@@ -518,4 +518,5 @@ create_target_directory_groups(lichii)
 add_custom_target(lichii_notes ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/dist/notes $<TARGET_FILE_DIR:lichii>/notes
     COMMENT "Copying the Adventure Notes modules")
-add_dependencies(lichii_notes lichii)
+# Built with the program, also when only `lichii` is asked for (--target lichii).
+add_dependencies(lichii lichii_notes)
