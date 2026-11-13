@@ -513,5 +513,9 @@ endif()
 create_target_directory_groups(lichii)
 
 # Adventure Notes modules shipped next to the program (render/adventure_notes.cpp, ShippedDir).
-add_custom_command(TARGET lichii POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/dist/notes $<TARGET_FILE_DIR:lichii>/notes)
+# A target of its own, so that editing only a module file copies it again (a POST_BUILD step
+# runs only when the program itself is relinked).
+add_custom_target(lichii_notes ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/dist/notes $<TARGET_FILE_DIR:lichii>/notes
+    COMMENT "Copying the Adventure Notes modules")
+add_dependencies(lichii_notes lichii)
